@@ -6,8 +6,6 @@ import scala.concurrent.duration._
 import scala.concurrent.duration.Duration
 import akka.routing.RoundRobinRouter
 import Messages.Calculate
-import Messages.Work
-import Messages.WorkComplete
 import Messages.ClientRequest
 import scala.collection.mutable.ListBuffer
 import scala.collection.mutable.Queue
@@ -32,7 +30,7 @@ class Server extends Actor {
       var user = new UserBase(identifier, sender)
       userMap += (identifier -> user)
       ServerApp.nRequests += 1
-      if (ServerApp.nRequests == 100) {
+      if (ServerApp.nRequests == Messages.nClients) {
         printf("Got all requests")
         for ((client, userInst) <- userMap) {
           userInst.getReference() ! "ACK"
@@ -49,15 +47,15 @@ class UserBase(id : Int, actorRef : ActorRef) {
 
   //TODO Define Top 100 messages
   def getID() : Int =
-  {
-    return id
-  }
-  
+    {
+      return id
+    }
+
   def getReference() : ActorRef =
-  {
-    return actor
-  }
-  
+    {
+      return actor
+    }
+
   def getFollowers() : ListBuffer[ActorRef] = {
     return followers
   }
