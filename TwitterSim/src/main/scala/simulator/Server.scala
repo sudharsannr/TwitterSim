@@ -37,7 +37,6 @@ class Server extends Actor {
         for ((client, userInst) <- userMap) {
           userInst.getReference() ! "ACK"
         }
-        //context.system.shutdown()
       }
   }
 }
