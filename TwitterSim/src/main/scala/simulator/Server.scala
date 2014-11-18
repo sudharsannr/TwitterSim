@@ -97,21 +97,26 @@ class UserBase(id : Int, actorRef : ActorRef) {
     messageQueue.enqueue(message)
   }
 
-  def generateFollowers(usersCount : Int) {
-
+  def generateFollowers (usersCount : Int, mean : Int) {
+    
     var r = new Random();
     var r1 = new Random();
     var usersMap : Map[Int, ListBuffer[Int]] = Map();
     var numberOfFollowers : Int = 0;
-
+    var modulo = usersCount * mean
+    var count : Int = 0
     for (i <- 0 until usersCount) {
-      numberOfFollowers = r.nextInt(usersCount)
+      numberOfFollowers = r.nextInt(modulo);
+      modulo = modulo - numberOfFollowers
+      count += numberOfFollowers
+      println("Num of followers for user "+i+": "+numberOfFollowers)
+      println("Total generated: "+count)
       var followers = new ListBuffer[Int]
       var j : Int = 0
       for (j <- 0 until numberOfFollowers) {
         followers += r1.nextInt(numberOfFollowers)
-      }
-      usersMap.put(i, followers)
-    }
+      }  
+      usersMap.put(i, followers);
+    } 
   }
 }
