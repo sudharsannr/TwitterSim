@@ -7,7 +7,7 @@ object Messages {
   val clientString : String = "Client"
   val requestString : String = "REQUEST"
   val nServers : Int = 10
-  val nClients : Int = 100
+  val nClients : Int = 10000
   val maxNeighbors : Int = nClients - 1
 
   sealed trait TwitterMessage
