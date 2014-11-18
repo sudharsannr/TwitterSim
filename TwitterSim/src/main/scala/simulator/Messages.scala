@@ -1,5 +1,7 @@
 package simulator
 
+import akka.actor.ActorRef
+
 object Messages {
 
   val clientString : String = "Client"
@@ -9,8 +11,10 @@ object Messages {
   val maxNeighbors : Int = nClients - 1
 
   sealed trait TwitterMessage
+  case object Init extends TwitterMessage
+  case class Request(serverActor : ActorRef) extends TwitterMessage
   case class ClientInit(ipAddr : String) extends TwitterMessage
-  case class ClientRequest(identifier : String, requestStr : String) extends TwitterMessage
+  case class ClientRequest(identifier : Int, requestStr : String) extends TwitterMessage
 
   case object Calculate extends TwitterMessage
 

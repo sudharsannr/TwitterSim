@@ -10,42 +10,36 @@ import Messages.ClientInit
 import Messages.ClientRequest
 import akka.routing.RoundRobinRouter
 import Messages.Calculate
+import Messages.Init
+import Messages.Request
+import akka.actor.ActorRef
 
 object ClientApp extends App {
   val ipAddr : String = args(0)
   implicit val system = ActorSystem("TwitterClientActor", ConfigFactory.load("applicationClient.conf"))
-  val clientActor = system.actorOf(Props[Client], name = "Client")
-  clientActor ! ClientInit(ipAddr)
+  val serverActor = system.actorOf(Props[Server])
+  val interActor = system.actorOf(Props(new Interactor(serverActor)))
+  interActor ! Init
 }
 
-class Client extends Actor {
-  var counter : Int = 0
-  val serverRouter = context.actorOf(
-    Props[Server].withRouter(RoundRobinRouter(Messages.nServers)), name = "ServerRouter")
+class Interactor(serverActor : ActorRef) extends Actor {
+  var worker : IndexedSeq[ActorRef] = null
+  worker = (0 to Messages.nClients - 1).map(i => context.actorOf(Props(new Client(i : Int))))
 
   def receive = {
+    case Init =>
+      for (i <- 0 to Messages.nClients - 1)
+        worker(i) ! Request(serverActor)
+  }
+}
 
-    case ClientInit(ipAddr) =>
-      println("Accessing Server at " + ipAddr)
-      //val remote = context.actorFor("akka.tcp://TwitterActor@" + ipAddr + "/user/master")
-      for (i <- 1 until Messages.nClients + 1) {
-        val identifier : String = Messages.clientString + "%010d".format(i)
-        serverRouter ! ClientRequest(identifier, Messages.requestString)
-      }
-
+class Client(identifier : Int) extends Actor {
+  def receive = {
+    case Request(serverActor) =>
+      println(identifier + " sending request")
+      serverActor ! ClientRequest(identifier, Messages.requestString)
+      
     case "ACK" =>
-      println("Acknowledged " + counter)
-      counter += 1
-      // If all received, generate messages
-
+      println("Acknowledged by server")
   }
-  
-  /**
-   * Utility function extract Option
-   */
-  def show(x : Option[Any]) = x match {
-    case Some(s) => s
-    case None => "?"
-  }
-
 }
