@@ -1,50 +1,44 @@
 package simulator
 
-import akka.actor.Actor
-
-import akka.actor.actorRef2Scala
-import java.security.MessageDigest
 import akka.actor.ActorSystem
 import com.typesafe.config.ConfigFactory
 import akka.actor.Props
-import Messages.ClientInit
-import Messages.ClientRequest
-import akka.routing.RoundRobinRouter
-import Messages.Calculate
-import Messages.Init
-import Messages.Request
-import Messages.RouteClients
-import Messages.Tweet
-import Messages.Top
-import Messages.MessageList
-import akka.actor.ActorRef
+import akka.actor.Actor
+import simulator.Messages.RegisterClients
+import simulator.Messages.Init
 import scala.util.Random
+import simulator.Messages.Tweet
+import simulator.Messages.Top
+import simulator.Messages.RouteClients
+import simulator.Messages.MessageList
 
 object ClientApp extends App {
   val ipAddr : String = args(0)
   implicit val system = ActorSystem("TwitterClientActor", ConfigFactory.load("applicationClient.conf"))
   val serverActor = system.actorOf(Props[Server])
   val interActor = system.actorOf(Props(new Interactor()))
+  var nRequests : Int = 0
   interActor ! Init
 }
 
 class Interactor() extends Actor {
   var serverActor = ClientApp.serverActor
-  var worker : IndexedSeq[ActorRef] = null
-  worker = (0 to Messages.nClients - 1).map(i => context.actorOf(Props(new Client(i : Int))))
+  var clientList = new Array[UserBase](Messages.nClients)
+  for (i <- 0 to Messages.nClients - 1)
+    clientList(i) = new UserBase(i, context.actorOf(Props(new Client(i : Int))))
   def receive = {
     case Init =>
-      for (i <- 0 to Messages.nClients - 1)
-        worker(i) ! Request
+      serverActor ! RegisterClients(clientList)
+      
     case RouteClients =>
       val rand = new Random();
       for (i <- 0 to Messages.msgLimit - 1) {
         var randomTweet = randomString(140)
-        worker(rand.nextInt(Messages.nClients)) ! Tweet(randomTweet)
+        clientList(rand.nextInt(Messages.nClients)).getReference() ! Tweet(randomTweet)
       }
 
       for (i <- 0 to Messages.nClients - 1) {
-        worker(i) ! Top(100)
+        clientList(i).getReference() ! Top(100)
       }
 
       context.stop(self)
@@ -64,14 +58,11 @@ class Interactor() extends Actor {
 class Client(identifier : Int) extends Actor {
   var serverActor = ClientApp.serverActor
   def receive = {
-    case Request =>
-      println(identifier + " sending request")
-      serverActor ! ClientRequest(identifier, Messages.requestString)
 
-    case "ACK" =>
+  	case "ACK" =>
       println("Acknowledged by server")
-      ServerApp.nRequests -= 1
-      if (ServerApp.nRequests == 0) {
+      ClientApp.nRequests += 1
+      if (ClientApp.nRequests == Messages.nClients) {
         ClientApp.interActor ! RouteClients
       }
 
