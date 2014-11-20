@@ -13,6 +13,7 @@ import simulator.Messages.RouteClients
 import simulator.Messages.MessageList
 import scala.collection.mutable.ListBuffer
 import scala.io.Source
+import scala.util.control.Breaks._
 
 object ClientApp extends App {
 
@@ -34,9 +35,9 @@ class Interactor() extends Actor {
   readFollowersStats(Messages.nClients)
   /*for(user <- clientList)
   {
-	  printf(user.getID() + ":")
+	  printf(user.getName() + ":")
 	  for(follower <- user.getFollowers())
-		  printf(follower.getID() + ", ")
+		  printf(follower.getName() + ", ")
 	  println()
   }*/
 
@@ -55,7 +56,8 @@ class Interactor() extends Actor {
       for (i <- 0 to Messages.nClients - 1) {
         clientList(i).getReference() ! Top(100)
       }
-      context.stop(self)
+    //context.stop(self)
+    //context.system.shutdown()
   }
 
   def randomTweet(curUser : User) : String = {
@@ -74,7 +76,7 @@ class Interactor() extends Actor {
                   while (true) {
                     var idx = r.nextInt(Messages.nClients)
                     if (idx != curUser.getID()) {
-                      var tweet = StringBuilder.newBuilder.++=("@").++=(clientList(idx).getID().toString).++=(" ")
+                      var tweet = StringBuilder.newBuilder.++=("@").++=(clientList(idx).getName()).++=(" ")
                       return tweet.mkString + randomString(140 - tweet.length)
                     }
                   }
@@ -83,7 +85,7 @@ class Interactor() extends Actor {
                 else {
                   var randVal = r.nextInt(nFollowers)
                   var follower = followers(randVal)
-                  var tweet = StringBuilder.newBuilder.++=("@").++=(follower.getID().toString).++=(" ")
+                  var tweet = StringBuilder.newBuilder.++=("@").++=(follower.getName()).++=(" ")
                   return tweet.mkString + randomString(140 - tweet.length)
                 }
               case TweetStrTo.toRandomUser =>
@@ -91,7 +93,7 @@ class Interactor() extends Actor {
                 while (true) {
                   var idx = r.nextInt(Messages.nClients)
                   if (idx != curUser.getID()) {
-                    var tweet = StringBuilder.newBuilder.++=("@").++=(clientList(idx).getID().toString).++=(" ")
+                    var tweet = StringBuilder.newBuilder.++=("@").++=(clientList(idx).getName()).++=(" ")
                     return tweet.mkString + randomString(140 - tweet.length)
                   }
                 }
@@ -107,7 +109,7 @@ class Interactor() extends Actor {
                   while (true) {
                     var idx = r.nextInt(Messages.nClients)
                     if (idx != curUser.getID()) {
-                      var atUser = StringBuilder.newBuilder.++=("@").++=(clientList(idx).getID().toString)
+                      var atUser = StringBuilder.newBuilder.++=("@").++=(clientList(idx).getName())
                       var remChars = 140 - atUser.length
                       var str1Len = r.nextInt(remChars) + 1
                       var str1 : String = randomString(str1Len)
@@ -123,7 +125,7 @@ class Interactor() extends Actor {
                 else {
                   var randVal = r.nextInt(nFollowers)
                   var follower = followers(randVal)
-                  var atUser = StringBuilder.newBuilder.++=("@").++=(follower.getID().toString)
+                  var atUser = StringBuilder.newBuilder.++=("@").++=(follower.getName())
                   var remChars = 140 - atUser.length
                   var str1Len = r.nextInt(remChars) + 1
                   var str1 : String = randomString(str1Len)
@@ -138,7 +140,7 @@ class Interactor() extends Actor {
                 while (true) {
                   var idx = r.nextInt(Messages.nClients)
                   if (idx != curUser.getID()) {
-                    var atUser = StringBuilder.newBuilder.++=("@").++=(clientList(idx).getID().toString)
+                    var atUser = StringBuilder.newBuilder.++=("@").++=(clientList(idx).getName())
                     var remChars = 140 - atUser.length
                     var str1Len = r.nextInt(remChars) + 1
                     var str1 : String = randomString(str1Len)
@@ -162,7 +164,16 @@ class Interactor() extends Actor {
       return sb.toString
     val r = new scala.util.Random
     for (i <- 1 to length) {
-      sb.append(r.nextPrintableChar)
+      breakable {
+        while (true) {
+          var char = r.nextPrintableChar
+          if (char.!=('@')) {
+            sb.append(char)
+            break
+          }
+        }
+        throw new Exception("Exception at infinite while")
+      }
     }
     return sb.toString
   }
@@ -174,10 +185,16 @@ class Interactor() extends Actor {
       nFollowers = r.nextInt(Messages.avgFollowers);
       val user = clientList(i)
       for (f <- 0 until nFollowers + 1) {
-        val fIdx = r.nextInt(usersCount)
-        //TODO Lame plug to ignore ith user being its own follower; use more robust logic
-        if (fIdx != i)
-          user.addFollower(clientList(fIdx))
+        breakable {
+          while (true) {
+            val fIdx = r.nextInt(usersCount)
+            if (fIdx != i) {
+              user.addFollower(clientList(fIdx))
+              break
+            }
+          }
+          throw new Exception("Exception at infinite while")
+        }
       }
     }
   }
@@ -231,7 +248,7 @@ class Client(identifier : Int) extends Actor {
   def receive = {
 
     case "ACK" =>
-      println("Acknowledged by server")
+      println("Client " + identifier + " activated")
       ClientApp.nRequests += 1
       if (ClientApp.nRequests == Messages.nClients) {
         ClientApp.interActor ! RouteClients

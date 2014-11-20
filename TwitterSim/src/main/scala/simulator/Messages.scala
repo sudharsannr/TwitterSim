@@ -12,6 +12,7 @@ object Messages {
   val msgLimit : Int = 1000
   val mean : Int = 200
   val avgFollowers : Int = 50
+  val avgTweetLength : Int = 28
 
   sealed trait TwitterMessage
   case object Init extends TwitterMessage

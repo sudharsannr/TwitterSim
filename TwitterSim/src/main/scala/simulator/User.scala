@@ -9,6 +9,7 @@ import scala.collection.mutable.Map
 
 class User(id : Int, actorRef : ActorRef) {
   val identifier : Int = id
+  val userName : String = Random.alphanumeric.take(4+Random.nextInt(12)).mkString
   val actor : ActorRef = actorRef
   var followers : ListBuffer[User] = ListBuffer.empty[User]
   var messageQueue : Queue[String] = new Queue[String]
@@ -24,9 +25,13 @@ class User(id : Int, actorRef : ActorRef) {
     }
     return msgList
   }
-  
+
   def getID() : Int = {
     return id
+  }
+
+  def getName() : String = {
+    return userName
   }
 
   def getReference() : ActorRef = {
@@ -46,7 +51,6 @@ class User(id : Int, actorRef : ActorRef) {
   }
 
   def addMessage(message : String) {
-    println("Adding message " + message + " to client#: " + id)
     messageQueue.enqueue(message)
   }
 
