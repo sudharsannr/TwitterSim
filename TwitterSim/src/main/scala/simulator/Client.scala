@@ -32,7 +32,6 @@ class Interactor() extends Actor {
     clientList(i) = new User(i, context.actorOf(Props(new Client(i : Int))))
   //generateFollowers(Messages.nClients, Messages.mean)
   readFollowersStats(Messages.nClients)
-  generateFollowers(Messages.nClients, Messages.mean)
   /*for(user <- clientList)
   {
 	  printf(user.getID() + ":")
