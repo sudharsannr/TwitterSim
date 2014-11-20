@@ -30,14 +30,10 @@ class Interactor() extends Actor {
   var clientList = new Array[User](Messages.nClients)
   for (i <- 0 to Messages.nClients - 1)
     clientList(i) = new User(i, context.actorOf(Props(new Client(i : Int))))
-<<<<<<< Upstream, based on origin/master
   //generateFollowers(Messages.nClients, Messages.mean)
   readFollowersStats(Messages.nClients)
-  for(user <- clientList)
-=======
   generateFollowers(Messages.nClients, Messages.mean)
   /*for(user <- clientList)
->>>>>>> 5aeb0c4 Random generation of tweets.
   {
 	  printf(user.getID() + ":")
 	  for(follower <- user.getFollowers())
@@ -187,51 +183,48 @@ class Interactor() extends Actor {
     }
   }
 
-<<<<<<< Upstream, based on origin/master
   def readFollowersStats(usersCount : Int) {
     val filename = "followers_stats.txt"
     var line : String = ""
-    
+
     Source.fromFile(filename).getLines.foreach { line =>
       var tempArr = line.split(" ")
       var minMaxArr = tempArr.array(0).split("-")
       var percentage = tempArr.array(1)
       var minFollowers = minMaxArr.array(0)
       var maxFollowers = minMaxArr.array(1)
-      
+
       FollowersGeneration(usersCount, minFollowers.toInt, maxFollowers.toInt, percentage.toDouble)
     }
-  
+
   }
-  
-  def FollowersGeneration (usersCount : Int, minFollowers : Int, maxFollowers : Int, followersPercentage : Double) {
-    
+
+  def FollowersGeneration(usersCount : Int, minFollowers : Int, maxFollowers : Int, followersPercentage : Double) {
+
     var r = new Random();
     var r1 = new Random();
     var noOfFollowers : Int = 0
-    
-    var users : Double = (followersPercentage/100) * usersCount
+
+    var users : Double = (followersPercentage / 100) * usersCount
     var temp : Int = users.toInt
-    
+
     for (i <- 0 until temp) {
-      
-      if (minFollowers == 0) 
+
+      if (minFollowers == 0)
         noOfFollowers = r.nextInt(maxFollowers)
       else
         noOfFollowers = r.nextInt(minFollowers) + maxFollowers
-     
+
       var j : Int = 0
       val user = clientList(i)
-      
+
       for (j <- 0 until noOfFollowers) {
-          user.addFollower(clientList(r1.nextInt(usersCount)))
-      }      
+        user.addFollower(clientList(r1.nextInt(usersCount)))
+      }
     }
-  
+
   }
-  
-=======
->>>>>>> 5aeb0c4 Random generation of tweets.
+
 }
 
 class Client(identifier : Int) extends Actor {
