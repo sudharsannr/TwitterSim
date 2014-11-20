@@ -2,3 +2,13 @@ eclipse
 exit
 eclipse
 exit
+clean
+compile
+run
+run 127.0.0.1
+run
+q
+quit
+exit
+run
+clean

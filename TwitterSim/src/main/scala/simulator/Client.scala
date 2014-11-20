@@ -12,10 +12,11 @@ import simulator.Messages.Top
 import simulator.Messages.RouteClients
 import simulator.Messages.MessageList
 import scala.collection.mutable.ListBuffer
+import scala.io.Source
 
 object ClientApp extends App {
 
-  val ipAddr : String = args(0)
+  //val ipAddr : String = args(0)
   implicit val system = ActorSystem("TwitterClientActor", ConfigFactory.load("applicationClient.conf"))
   val serverActor = system.actorOf(Props[Server])
   val interActor = system.actorOf(Props(new Interactor()))
@@ -29,7 +30,8 @@ class Interactor() extends Actor {
   var clientList = new Array[User](Messages.nClients)
   for (i <- 0 to Messages.nClients - 1)
     clientList(i) = new User(i, context.actorOf(Props(new Client(i : Int))))
-  generateFollowers(Messages.nClients, Messages.mean)
+  //generateFollowers(Messages.nClients, Messages.mean)
+  readFollowersStats(Messages.nClients)
   for(user <- clientList)
   {
 	  printf(user.getID() + ":")
@@ -78,6 +80,48 @@ class Interactor() extends Actor {
         	user.addFollower(clientList(fIdx))
       }
     }
+  }
+
+  def readFollowersStats(usersCount : Int) {
+    val filename = "followers_stats.txt"
+    var line : String = ""
+    
+    Source.fromFile(filename).getLines.foreach { line =>
+      var tempArr = line.split(" ")
+      var minMaxArr = tempArr.array(0).split("-")
+      var percentage = tempArr.array(1)
+      var minFollowers = minMaxArr.array(0)
+      var maxFollowers = minMaxArr.array(1)
+      
+      FollowersGeneration(usersCount, minFollowers.toInt, maxFollowers.toInt, percentage.toDouble)
+    }
+  
+  }
+  
+  def FollowersGeneration (usersCount : Int, minFollowers : Int, maxFollowers : Int, followersPercentage : Double) {
+    
+    var r = new Random();
+    var r1 = new Random();
+    var noOfFollowers : Int = 0
+    
+    var users : Double = (followersPercentage/100) * usersCount
+    var temp : Int = users.toInt
+    
+    for (i <- 0 until temp) {
+      
+      if (minFollowers == 0) 
+        noOfFollowers = r.nextInt(maxFollowers)
+      else
+        noOfFollowers = r.nextInt(minFollowers) + maxFollowers
+     
+      var j : Int = 0
+      val user = clientList(i)
+      
+      for (j <- 0 until noOfFollowers) {
+          user.addFollower(clientList(r1.nextInt(usersCount)))
+      }      
+    }
+  
   }
   
 }
