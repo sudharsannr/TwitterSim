@@ -17,21 +17,23 @@ object ServerApp extends App {
   val server = system.actorOf(Props[Server], name = "Server")
   var nRequests : Int = 0
   server ! Calculate
+
 }
 
 class Server extends Actor {
-  var userMap : Map[ActorRef, UserBase] = Map();
+
+  var userMap : Map[ActorRef, User] = Map();
   def receive = {
 
     case Calculate =>
-      printf("Server started!")
+      println("Server started!")
 
     case RegisterClients(userList) =>
-      printf("Registering clients")
-      for (i <- 0 to userList.length - 1) {
-        var userInst = userList(i).getReference
-        userMap += (userInst -> userList(i))
-        userInst ! "ACK"
+      println("Registering clients")
+      for (curUser <- userList) {
+        var userActor = curUser.getReference()
+        userMap += (userActor -> curUser)
+        userActor ! "ACK"
       }
 
     case Tweet(tweet) =>
@@ -42,4 +44,5 @@ class Server extends Actor {
       var user = userMap(sender)
       sender ! MessageList(user.getRecentMessages(n))
   }
+
 }
