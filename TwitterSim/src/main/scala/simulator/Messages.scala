@@ -14,8 +14,8 @@ object Messages {
   sealed trait TwitterMessage
   case object Init extends TwitterMessage
   case object Request extends TwitterMessage
+  case class RegisterClients(clientList : Array[UserBase]) extends TwitterMessage
   case class ClientInit(ipAddr : String) extends TwitterMessage
-  case class ClientRequest(identifier : Int, requestStr : String) extends TwitterMessage
   case class Tweet(tweet : String) extends TwitterMessage
   case class Top(n : Int) extends TwitterMessage
   case class MessageList(msgList : ListBuffer[String]) extends TwitterMessage
