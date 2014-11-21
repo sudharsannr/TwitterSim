@@ -80,6 +80,11 @@ class User(id : Int, actorRef : ActorRef) {
     followers += follower
   }
 
+  def addFollowing(followingUsers : User) {
+    following += followingUsers
+  }
+
+
   def addMessage(message : String) {
     messageQueue.enqueue(message)
   }
