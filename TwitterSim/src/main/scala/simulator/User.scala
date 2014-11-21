@@ -17,7 +17,7 @@ class User(id : Int, actorRef : ActorRef) {
   var messageQueue : Queue[String] = new Queue[String]
 
   override def equals(o : Any) = o match {
-    case that : User => that.identifier.equals(this.identifier)
+    case that : User => that.userName.equals(this.userName)
     case _ => false
   }
 
@@ -79,6 +79,11 @@ class User(id : Int, actorRef : ActorRef) {
   def addFollower(follower : User) {
     followers += follower
   }
+
+  def addFollowing(followingUsers : User) {
+    following += followingUsers
+  }
+
 
   def addMessage(message : String) {
     messageQueue.enqueue(message)
