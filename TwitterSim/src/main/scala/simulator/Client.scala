@@ -33,6 +33,9 @@ class Interactor() extends Actor {
     clientList(i) = new User(i, context.actorOf(Props(new Client(i : Int))))
   //generateFollowers(Messages.nClients, Messages.mean)
   readFollowersStats(Messages.nClients)
+  readUserRateStats(Messages.nClients)
+  /*for (user <- clientList)
+    println(user)*/
   /*for(user <- clientList)
   {
 	  printf(user.getName() + ":")
@@ -63,7 +66,7 @@ class Interactor() extends Actor {
 
   def randomTweet(curUser : User) : String = {
 
-    var tweetLength = Messages.avgTweetLength  + Random.nextInt(140-Messages.avgTweetLength+1)
+    var tweetLength = Messages.avgTweetLength + Random.nextInt(140 - Messages.avgTweetLength + 1)
     RandomPicker.pickRandom(TweetStrAt) match {
       case TweetStrAt.withoutAt => randomString(tweetLength)
       case TweetStrAt.withAt =>
@@ -199,6 +202,37 @@ class Interactor() extends Actor {
           throw new Exception("Exception at infinite while")
         }
       }
+    }
+  }
+
+  def readUserRateStats(usersCount : Int) {
+    val filename = "userRate_stats.txt"
+    var line : String = ""
+    var startIdx : Int = 0
+    var endIdx : Int = 0
+    Source.fromFile(filename).getLines.foreach { line =>
+      var tempArr = line.split(" ")
+      var minMaxArr = tempArr.array(0).split("-")
+      var percentage = tempArr.array(1)
+      var minRate = minMaxArr.array(0)
+      var maxRate = minMaxArr.array(1)
+      var nUsers : Int = (((percentage.toDouble / 100) * usersCount).ceil).toInt
+      endIdx = startIdx + nUsers
+      if (endIdx > usersCount)
+        endIdx = usersCount
+      setUserRate(minRate.toInt, maxRate.toInt, startIdx, endIdx)
+      startIdx = endIdx
+    }
+
+  }
+
+  def setUserRate(minRate : Int, maxRate : Int, startIdx : Int, endIdx : Int) {
+    println("--- " + startIdx + " " + endIdx)
+    var r = new Random();
+    val avgRate = minRate + (maxRate - minRate) / 2
+    for (i <- startIdx until endIdx) {
+      val newRate = minRate + r.nextInt(maxRate - minRate + 1)
+      clientList(i).setMessageRate(newRate)
     }
   }
 

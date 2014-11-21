@@ -11,6 +11,7 @@ class User(id : Int, actorRef : ActorRef) {
   val identifier : Int = id
   val userName : String = Random.alphanumeric.take(4 + Random.nextInt(12)).mkString
   val actor : ActorRef = actorRef
+  var msgRate : Int = 0
   var followers : ListBuffer[User] = ListBuffer.empty[User]
   var following : ListBuffer[User] = ListBuffer.empty[User]
   var messageQueue : Queue[String] = new Queue[String]
@@ -21,6 +22,11 @@ class User(id : Int, actorRef : ActorRef) {
   }
 
   override def hashCode = identifier.hashCode
+  
+  override def toString() : String = {
+    return identifier.toString + " " + userName + " " + msgRate.toString
+  }
+  
 
   def getRecentMessages(n : Int) : ListBuffer[String] = {
     var msgList : ListBuffer[String] = ListBuffer.empty[String]
@@ -65,6 +71,10 @@ class User(id : Int, actorRef : ActorRef) {
   def getMessages() : Queue[String] = {
     return messageQueue
   }
+  
+  def getMsgRate() : Int = {
+    return msgRate
+  }
 
   def addFollower(follower : User) {
     followers += follower
@@ -72,6 +82,10 @@ class User(id : Int, actorRef : ActorRef) {
 
   def addMessage(message : String) {
     messageQueue.enqueue(message)
+  }
+  
+  def setMessageRate(newMsgRate : Int){
+    msgRate = newMsgRate
   }
 
 }
