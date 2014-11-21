@@ -56,14 +56,16 @@ class Interactor() extends Actor {
       for (i <- 0 to Messages.nClients - 1) {
         clientList(i).getReference() ! Top(100)
       }
+      println("Complete!")
     //context.stop(self)
     //context.system.shutdown()
   }
 
   def randomTweet(curUser : User) : String = {
 
+    var tweetLength = Messages.avgTweetLength  + Random.nextInt(140-Messages.avgTweetLength+1)
     RandomPicker.pickRandom(TweetStrAt) match {
-      case TweetStrAt.withoutAt => randomString(140)
+      case TweetStrAt.withoutAt => randomString(tweetLength)
       case TweetStrAt.withAt =>
         RandomPicker.pickRandom(TweetStrAtPos) match {
           case TweetStrAtPos.atBeginning =>
@@ -76,8 +78,8 @@ class Interactor() extends Actor {
                   while (true) {
                     var idx = r.nextInt(Messages.nClients)
                     if (idx != curUser.getID()) {
-                      var tweet = StringBuilder.newBuilder.++=("@").++=(clientList(idx).getName()).++=(" ")
-                      return tweet.mkString + randomString(140 - tweet.length)
+                      var handler = StringBuilder.newBuilder.++=("@").++=(clientList(idx).getName())
+                      return handler.mkString + " " + randomString(tweetLength - handler.length)
                     }
                   }
                   throw new Exception("Exception at infinite while")
@@ -85,16 +87,16 @@ class Interactor() extends Actor {
                 else {
                   var randVal = r.nextInt(nFollowers)
                   var follower = followers(randVal)
-                  var tweet = StringBuilder.newBuilder.++=("@").++=(follower.getName()).++=(" ")
-                  return tweet.mkString + randomString(140 - tweet.length)
+                  var handler = StringBuilder.newBuilder.++=("@").++=(follower.getName())
+                  return handler.mkString + " " + randomString(tweetLength - handler.length)
                 }
               case TweetStrTo.toRandomUser =>
                 var r = new Random()
                 while (true) {
                   var idx = r.nextInt(Messages.nClients)
                   if (idx != curUser.getID()) {
-                    var tweet = StringBuilder.newBuilder.++=("@").++=(clientList(idx).getName()).++=(" ")
-                    return tweet.mkString + randomString(140 - tweet.length)
+                    var handler = StringBuilder.newBuilder.++=("@").++=(clientList(idx).getName())
+                    return handler.mkString + " " + randomString(tweetLength - handler.length)
                   }
                 }
                 throw new Exception("Exception at infinite while")
@@ -109,15 +111,15 @@ class Interactor() extends Actor {
                   while (true) {
                     var idx = r.nextInt(Messages.nClients)
                     if (idx != curUser.getID()) {
-                      var atUser = StringBuilder.newBuilder.++=("@").++=(clientList(idx).getName())
-                      var remChars = 140 - atUser.length
+                      var handler = StringBuilder.newBuilder.++=("@").++=(clientList(idx).getName())
+                      var remChars = tweetLength - handler.length - 1
                       var str1Len = r.nextInt(remChars) + 1
                       var str1 : String = randomString(str1Len)
                       var str2 : String = ""
                       var splitIdx = remChars - str1Len
                       if (splitIdx > 0)
                         str2 = randomString(splitIdx - 1)
-                      return str1 + atUser.toString + " " + str2
+                      return str1 + " " + handler.toString + " " + str2
                     }
                   }
                   throw new Exception("Exception at infinite while")
@@ -125,30 +127,30 @@ class Interactor() extends Actor {
                 else {
                   var randVal = r.nextInt(nFollowers)
                   var follower = followers(randVal)
-                  var atUser = StringBuilder.newBuilder.++=("@").++=(follower.getName())
-                  var remChars = 140 - atUser.length
+                  var handler = StringBuilder.newBuilder.++=("@").++=(follower.getName())
+                  var remChars = tweetLength - handler.length - 1
                   var str1Len = r.nextInt(remChars) + 1
                   var str1 : String = randomString(str1Len)
                   var str2 : String = ""
                   var splitIdx = remChars - str1Len
                   if (splitIdx > 0)
                     str2 = randomString(splitIdx - 1)
-                  return str1 + atUser.toString + " " + str2
+                  return str1 + " " + handler.toString + " " + str2
                 }
               case TweetStrTo.toRandomUser =>
                 var r = new Random()
                 while (true) {
                   var idx = r.nextInt(Messages.nClients)
                   if (idx != curUser.getID()) {
-                    var atUser = StringBuilder.newBuilder.++=("@").++=(clientList(idx).getName())
-                    var remChars = 140 - atUser.length
+                    var handler = StringBuilder.newBuilder.++=("@").++=(clientList(idx).getName())
+                    var remChars = tweetLength - handler.length - 1
                     var str1Len = r.nextInt(remChars) + 1
                     var str1 : String = randomString(str1Len)
                     var str2 : String = ""
                     var splitIdx = remChars - str1Len
                     if (splitIdx > 0)
                       str2 = randomString(splitIdx - 1)
-                    return str1 + atUser.toString + " " + str2
+                    return str1 + " " + handler.toString + " " + str2
                   }
                 }
                 throw new Exception("Exception at infinite while")
@@ -163,7 +165,7 @@ class Interactor() extends Actor {
     if (length <= 0)
       return sb.toString
     val r = new scala.util.Random
-    for (i <- 1 to length) {
+    /*for (i <- 1 to length) {
       breakable {
         while (true) {
           var char = r.nextPrintableChar
@@ -174,7 +176,8 @@ class Interactor() extends Actor {
         }
         throw new Exception("Exception at infinite while")
       }
-    }
+    }*/
+    sb.append(r.alphanumeric.take(length).mkString)
     return sb.toString
   }
 

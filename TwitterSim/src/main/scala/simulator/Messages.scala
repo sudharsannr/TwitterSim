@@ -9,7 +9,7 @@ object Messages {
   val nServers : Int = 10
   val nClients : Int = 100
   val maxNeighbors : Int = nClients - 1
-  val msgLimit : Int = 1000
+  val msgLimit : Int = 1000000
   val mean : Int = 200
   val avgFollowers : Int = 50
   val avgTweetLength : Int = 28

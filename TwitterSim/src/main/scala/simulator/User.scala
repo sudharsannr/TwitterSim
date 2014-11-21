@@ -9,10 +9,18 @@ import scala.collection.mutable.Map
 
 class User(id : Int, actorRef : ActorRef) {
   val identifier : Int = id
-  val userName : String = Random.alphanumeric.take(4+Random.nextInt(12)).mkString
+  val userName : String = Random.alphanumeric.take(4 + Random.nextInt(12)).mkString
   val actor : ActorRef = actorRef
   var followers : ListBuffer[User] = ListBuffer.empty[User]
+  var following : ListBuffer[User] = ListBuffer.empty[User]
   var messageQueue : Queue[String] = new Queue[String]
+
+  override def equals(o : Any) = o match {
+    case that : User => that.identifier.equals(this.identifier)
+    case _ => false
+  }
+
+  override def hashCode = identifier.hashCode
 
   def getRecentMessages(n : Int) : ListBuffer[String] = {
     var msgList : ListBuffer[String] = ListBuffer.empty[String]
@@ -38,8 +46,20 @@ class User(id : Int, actorRef : ActorRef) {
     return actor
   }
 
+  def isFollowing(user : User) : Boolean = {
+    user.getFollowers().contains(this)
+  }
+
+  def isFollowed(user : User) : Boolean = {
+    getFollowers().contains(user)
+  }
+
   def getFollowers() : ListBuffer[User] = {
     return followers
+  }
+
+  def getFollowing() : ListBuffer[User] = {
+    return following
   }
 
   def getMessages() : Queue[String] = {
