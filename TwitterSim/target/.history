@@ -31,3 +31,15 @@ clean
 compile
 clean
 compile
+sbt compile
+run
+exit
+reload
+clean
+help
+clean
+compile
+update
+run
+eclipse
+exit
