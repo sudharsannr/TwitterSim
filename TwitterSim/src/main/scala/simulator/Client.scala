@@ -11,9 +11,13 @@ import simulator.Messages.Tweet
 import simulator.Messages.Top
 import simulator.Messages.RouteClients
 import simulator.Messages.MessageList
+import simulator.Messages.PrintMessages
 import scala.collection.mutable.ListBuffer
 import scala.io.Source
 import scala.util.control.Breaks._
+import scala.concurrent.duration._
+import akka.actor.Scheduler
+import akka.actor.Cancellable
 
 object ClientApp extends App {
 
@@ -29,6 +33,8 @@ object ClientApp extends App {
 class Interactor() extends Actor {
   var serverActor = ClientApp.serverActor
   var clientList = new Array[User](Messages.nClients)
+  var nMessages : Int = 0
+  var cancelMap : Map[User, Cancellable] = Map()
   for (i <- 0 to Messages.nClients - 1)
     clientList(i) = new User(i, context.actorOf(Props(new Client(i : Int))))
   //generateFollowers(Messages.nClients, Messages.mean)
@@ -51,17 +57,42 @@ class Interactor() extends Actor {
 
     case RouteClients =>
       val rand = new Random();
-      for (i <- 0 to Messages.msgLimit - 1) {
+      val actorSys = ClientApp.system
+      import actorSys.dispatcher
+      for (curUser <- clientList) {
+        val intervalRate = curUser.getMsgRate.milliseconds
+        val cancellable = actorSys.scheduler.schedule(0.milliseconds, intervalRate)(sendMsg(curUser))
+        cancelMap += (curUser -> cancellable)
+      }
+    /*for (i <- 0 to Messages.msgLimit - 1) {
         val curUser = clientList(rand.nextInt(Messages.nClients))
         var rndTweet = randomTweet(curUser)
         curUser.getReference() ! Tweet(rndTweet)
-      }
+      }*/
+
+    case PrintMessages =>
+      println("Printing messages")
       for (i <- 0 to Messages.nClients - 1) {
         clientList(i).getReference() ! Top(100)
       }
       println("Complete!")
     //context.stop(self)
     //context.system.shutdown()
+  }
+
+  def sendMsg(curUser : User) = {
+    if (nMessages == Messages.msgLimit) {
+      //println("Limit reached!")
+      for (cancellable <- cancelMap.values)
+        cancellable.cancel()
+      self ! PrintMessages
+    }
+    if (nMessages < Messages.msgLimit) {
+      var rndTweet = randomTweet(curUser)
+      //println(curUser + " ---> " + rndTweet)
+      curUser.getReference() ! Tweet(rndTweet)
+      nMessages += 1
+    }
   }
 
   def randomTweet(curUser : User) : String = {
@@ -227,7 +258,6 @@ class Interactor() extends Actor {
   }
 
   def setUserRate(minRate : Int, maxRate : Int, startIdx : Int, endIdx : Int) {
-    println("--- " + startIdx + " " + endIdx)
     var r = new Random();
     val avgRate = minRate + (maxRate - minRate) / 2
     for (i <- startIdx until endIdx) {

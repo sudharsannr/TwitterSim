@@ -37,6 +37,7 @@ class Server extends Actor {
       }
 
     case Tweet(tweet) =>
+      //println("Received " + tweet)
       var user = userMap(sender)
       user.addMessage(tweet)
 
