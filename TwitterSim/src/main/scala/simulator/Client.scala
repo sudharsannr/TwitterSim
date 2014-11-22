@@ -302,7 +302,10 @@ class Interactor() extends Actor {
       val user = clientList(i)
 
       for (j <- 0 until noOfFollowers) {
-        user.addFollower(clientList(r1.nextInt(usersCount)))
+        val id = r1.nextInt(usersCount)
+        user.addFollower(clientList(id))
+        val following = clientList(id)
+        following.addFollowing(user)
       }
     }
 

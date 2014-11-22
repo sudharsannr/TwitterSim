@@ -9,7 +9,7 @@ import scala.collection.mutable.Map
 
 class User(id : Int, actorRef : ActorRef) {
   val identifier : Int = id
-  val userName : String = Random.alphanumeric.take(4 + Random.nextInt(12)).mkString
+  var userName : String = Random.alphanumeric.take(4 + Random.nextInt(12)).mkString
   val actor : ActorRef = actorRef
   var msgRate : Int = 0
   var followers : ListBuffer[User] = ListBuffer.empty[User]
@@ -17,8 +17,10 @@ class User(id : Int, actorRef : ActorRef) {
   var messageQueue : Queue[String] = new Queue[String]
 
   override def equals(o : Any) = o match {
-    case that : User => that.userName.equals(this.userName)
+    case that : User => that.userName.equals(this.userName) 
+   // println("That Username: ============"+that.userName)
     case _ => false
+    
   }
 
   override def hashCode = identifier.hashCode
@@ -91,6 +93,10 @@ class User(id : Int, actorRef : ActorRef) {
   
   def setMessageRate(newMsgRate : Int){
     msgRate = newMsgRate
+  }
+  
+  def setUserName(newUserName : String) {
+    userName = newUserName
   }
 
 }

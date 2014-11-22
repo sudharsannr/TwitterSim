@@ -23,6 +23,7 @@ object ServerApp extends App {
 class Server extends Actor {
 
   var userMap : Map[ActorRef, User] = Map();
+  var usersList : ListBuffer[User] = ListBuffer.empty[User]
   def receive = {
 
     case Calculate =>
@@ -33,20 +34,27 @@ class Server extends Actor {
       for (curUser <- userList) {
         var userActor = curUser.getReference()
         userMap += (userActor -> curUser)
+        usersList += curUser
         userActor ! "ACK"
       }
+      
 
     case Tweet(tweet) =>
       //println("Received " + tweet)
       var user = userMap(sender)
       var mentions = findMentions(tweet)
       for (usersMentioned <- mentions) {
-        var userFollowers = user.getFollowers()     
-        var userFollowing = user.getFollowing()     
-        var mentionUserObj = getUserFromFollowers(usersMentioned, userFollowers, userFollowing)
-        if (mentionUserObj != null)
-          mentionUserObj.addMessage(tweet)
-        //else find that user
+        
+        var tempUser = new User(0, null)
+        tempUser.setUserName(usersMentioned)
+        var mentionedUserObj = usersList(usersList.indexOf(tempUser))
+    	mentionUserObj.addMessage(tweet)
+    	
+	    var mutualFollowers = findMutualFollowers(mentionUserObj, user)
+	    for (mFollowers <- mutualFollowers) {
+	    	mFollowers.addMessage(tweet)
+	    }     
+             
       }
       user.addMessage(tweet)
 
@@ -55,24 +63,25 @@ class Server extends Actor {
       sender ! MessageList(user.getRecentMessages(n))
   }
 
-  
-  def getUserFromFollowers(usersMentioned : String, userFollowers : ListBuffer[User], userFollowing : ListBuffer[User]) : User = {
-    for (users <- userFollowers) {
-      if (users.equals(usersMentioned)) {
-        return users
+  def findMutualFollowers (mentionUserObj : User, tweeterObj : User) : ListBuffer[User] = {
+   
+    var mentionedFollowers = mentionUserObj.getFollowers()
+    var tweetersFollowers = tweeterObj.getFollowers()
+    var mutualFollowers : ListBuffer[User] = ListBuffer.empty[User]
+    
+    //n^2 logic.
+    for (tFollowers <- tweetersFollowers) {
+      for (mFollowers <- mentionedFollowers) {
+        if (tFollowers.equals(mFollowers)) {
+        	mutualFollowers += tFollowers
+        }
       }
     }
     
-    for (users <- userFollowing) {
-      if (users.equals(usersMentioned)) {
-        return users
-      }
-    }
+    return mutualFollowers
     
-    return null
   }
   
-
   def findMentions (tweet : String) : ListBuffer[String] = {
     var tweetArr = tweet.toCharArray()
     var mentions = new ListBuffer[String]
