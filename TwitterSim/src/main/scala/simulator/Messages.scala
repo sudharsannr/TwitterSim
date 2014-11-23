@@ -9,7 +9,7 @@ object Messages {
   val nServers : Int = 10
   val nClients : Int = 100
   val maxNeighbors : Int = nClients - 1
-  val msgLimit : Int = 1000
+  val msgLimit : Int = 10000
   val mean : Int = 200
   val avgFollowers : Int = 50
   val avgTweetLength : Int = 28
@@ -24,6 +24,8 @@ object Messages {
   case class Top(n : Int) extends TwitterMessage
   case class MessageList(msgList : ListBuffer[String]) extends TwitterMessage
   case object RouteClients extends TwitterMessage
-  case object Calculate extends TwitterMessage
+  case object Start extends TwitterMessage
+  case object ShutDown extends TwitterMessage
+  case object ClientCompleted extends TwitterMessage
 
 }

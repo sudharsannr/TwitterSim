@@ -1,14 +1,7 @@
 package simulator
 
-import akka.actor.ActorSystem
-import akka.actor.Props
-import akka.actor.Actor
-import akka.actor.ActorRef
-import simulator.Messages.RegisterClients
-import simulator.Messages.Tweet
-import simulator.Messages.Top
-import simulator.Messages.MessageList
-import simulator.Messages.Calculate
+import akka.actor.{ActorSystem, Props, Actor, ActorRef}
+import simulator.Messages.{RegisterClients, Tweet, Top, MessageList, Start, ShutDown}
 import scala.collection.mutable.ListBuffer
 
 object ServerApp extends App {
@@ -16,29 +9,32 @@ object ServerApp extends App {
   val system = ActorSystem("TwitterActor")
   val server = system.actorOf(Props[Server], name = "Server")
   var nRequests : Int = 0
-  server ! Calculate
+  server ! Start
 
+}
+
+object ServerShare {
+  var userMap : Map[ActorRef, User] = Map();
 }
 
 class Server extends Actor {
 
-  var userMap : Map[ActorRef, User] = Map();
   def receive = {
 
-    case Calculate =>
+    case Start =>
       println("Server started!")
 
     case RegisterClients(userList) =>
       println("Registering clients")
       for (curUser <- userList) {
         var userActor = curUser.getReference()
-        userMap += (userActor -> curUser)
+        ServerShare.userMap += (userActor -> curUser)
         userActor ! "ACK"
       }
 
     case Tweet(tweet) =>
       //println("Received " + tweet)
-      var user = userMap(sender)
+      var user = ServerShare.userMap(sender)
       var mentions = findMentions(tweet)
       for (usersMentioned <- mentions) {
         var userFollowers = user.getFollowers()     
@@ -51,8 +47,11 @@ class Server extends Actor {
       user.addMessage(tweet)
 
     case Top(n) =>
-      var user = userMap(sender)
+      var user = ServerShare.userMap(sender)
       sender ! MessageList(user.getRecentMessages(n))
+      
+    case ShutDown =>
+      context.system.shutdown()
   }
 
   

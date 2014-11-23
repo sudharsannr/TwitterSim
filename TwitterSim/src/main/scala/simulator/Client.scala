@@ -1,29 +1,22 @@
 package simulator
 
-import akka.actor.ActorSystem
+import akka.actor.{ Actor, ActorSystem, Props, Scheduler, Cancellable, PoisonPill }
 import com.typesafe.config.ConfigFactory
-import akka.actor.Props
-import akka.actor.Actor
-import simulator.Messages.RegisterClients
-import simulator.Messages.Init
+import simulator.Messages.{ Init, Tweet, Top, RouteClients, MessageList, PrintMessages, RegisterClients, ClientCompleted, ShutDown }
 import scala.util.Random
-import simulator.Messages.Tweet
-import simulator.Messages.Top
-import simulator.Messages.RouteClients
-import simulator.Messages.MessageList
-import simulator.Messages.PrintMessages
+import scala.util.control.Breaks._
 import scala.collection.mutable.ListBuffer
 import scala.io.Source
-import scala.util.control.Breaks._
 import scala.concurrent.duration._
-import akka.actor.Scheduler
-import akka.actor.Cancellable
+import akka.routing.{FromConfig, RoundRobinRouter, Broadcast}
 
 object ClientApp extends App {
 
+  // TODO Stop when complete
   //val ipAddr : String = args(0)
-  implicit val system = ActorSystem("TwitterClientActor", ConfigFactory.load("applicationClient.conf"))
-  val serverActor = system.actorOf(Props[Server])
+  val system = ActorSystem("TwitterClientActor", ConfigFactory.load("applicationClient.conf"))
+  //val serverActor = system.actorOf(Props[Server])
+  val serverActor = system.actorOf(Props[Server].withRouter(RoundRobinRouter(nrOfInstances = 4)), "serverRouter")
   val interActor = system.actorOf(Props(new Interactor()))
   var nRequests : Int = 0
   interActor ! Init
@@ -35,6 +28,7 @@ class Interactor() extends Actor {
   var clientList = new Array[User](Messages.nClients)
   var nMessages : Int = 0
   var cancelMap : Map[User, Cancellable] = Map()
+  var nCompleted : Int = 0
   for (i <- 0 to Messages.nClients - 1)
     clientList(i) = new User(i, context.actorOf(Props(new Client(i : Int))))
   //generateFollowers(Messages.nClients, Messages.mean)
@@ -72,17 +66,24 @@ class Interactor() extends Actor {
 
     case PrintMessages =>
       println("Printing messages")
-      for (i <- 0 to Messages.nClients - 1) {
+      for (i <- 0 to Messages.nClients - 1) 
         clientList(i).getReference() ! Top(100)
+        
+    case ClientCompleted =>
+      nCompleted += 1
+      if(nCompleted == Messages.nClients )
+      {
+        serverActor ! Broadcast(PoisonPill)
+        context.system.shutdown()
       }
-      println("Complete!")
-    //context.stop(self)
-    //context.system.shutdown()
+
   }
 
   def sendMsg(curUser : User) = {
+    println(nMessages)
+    nMessages += 1
     if (nMessages == Messages.msgLimit) {
-      //println("Limit reached!")
+      println("Limit reached!")
       for (cancellable <- cancelMap.values)
         cancellable.cancel()
       self ! PrintMessages
@@ -91,7 +92,6 @@ class Interactor() extends Actor {
       var rndTweet = randomTweet(curUser)
       //println(curUser + " ---> " + rndTweet)
       curUser.getReference() ! Tweet(rndTweet)
-      nMessages += 1
     }
   }
 
@@ -261,7 +261,9 @@ class Interactor() extends Actor {
     var r = new Random();
     val avgRate = minRate + (maxRate - minRate) / 2
     for (i <- startIdx until endIdx) {
-      val newRate = minRate + r.nextInt(maxRate - minRate + 1)
+      var newRate = minRate + r.nextInt(maxRate - minRate + 1)
+      if(newRate == 0)
+        newRate += 1
       clientList(i).setMessageRate(newRate)
     }
   }
@@ -330,6 +332,8 @@ class Client(identifier : Int) extends Actor {
     case MessageList(msgList) =>
       println("Received top messages for client: " + identifier)
       msgList.foreach(println)
+      ClientApp.interActor  ! ClientCompleted
+      
   }
 
 }

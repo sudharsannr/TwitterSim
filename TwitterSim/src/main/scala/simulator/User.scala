@@ -22,21 +22,18 @@ class User(id : Int, actorRef : ActorRef) {
   }
 
   override def hashCode = identifier.hashCode
-  
+
   override def toString() : String = {
     return identifier.toString + " " + userName + " " + msgRate.toString
   }
-  
 
   def getRecentMessages(n : Int) : ListBuffer[String] = {
     var msgList : ListBuffer[String] = ListBuffer.empty[String]
-    breakable {
-      for (i <- 0 to n - 1) {
-        if (messageQueue.isEmpty)
-          break
+    var i = 0
+      while (i < n && !messageQueue.isEmpty) {
         msgList += messageQueue.dequeue()
+        i += 1
       }
-    }
     return msgList
   }
 
@@ -71,7 +68,7 @@ class User(id : Int, actorRef : ActorRef) {
   def getMessages() : Queue[String] = {
     return messageQueue
   }
-  
+
   def getMsgRate() : Int = {
     return msgRate
   }
@@ -84,12 +81,11 @@ class User(id : Int, actorRef : ActorRef) {
     following += followingUsers
   }
 
-
   def addMessage(message : String) {
     messageQueue.enqueue(message)
   }
-  
-  def setMessageRate(newMsgRate : Int){
+
+  def setMessageRate(newMsgRate : Int) {
     msgRate = newMsgRate
   }
 
