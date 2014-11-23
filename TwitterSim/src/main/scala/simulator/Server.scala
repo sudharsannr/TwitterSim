@@ -42,10 +42,10 @@ class Server extends Actor {
 
         var tempUser = new User(0, null)
         tempUser.setUserName(usersMentioned)
-        var mentionedUserObj = usersList(usersList.indexOf(tempUser))
-        mentionUserObj.addMessage(tweet)
+        var mentionedUserObj = ServerShare.usersList(ServerShare.usersList.indexOf(tempUser))
+        mentionedUserObj.addMessage(tweet)
 
-        var mutualFollowers = findMutualFollowers(mentionUserObj, user)
+        var mutualFollowers = findMutualFollowers(mentionedUserObj, user)
         for (mFollowers <- mutualFollowers) {
           mFollowers.addMessage(tweet)
         }
