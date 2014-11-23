@@ -31,15 +31,17 @@ clean
 compile
 clean
 compile
-sbt compile
-run
-exit
-reload
-clean
-help
 clean
 compile
-update
+clean
+compile
+clean
+compile
+clean
+compile
+clean
+compile
+clean
+compile
 run
-eclipse
-exit
+clean
