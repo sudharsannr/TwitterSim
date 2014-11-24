@@ -1,7 +1,7 @@
 package simulator
 
 import akka.actor.{ ActorSystem, Props, Actor, ActorRef }
-import simulator.Messages.{ RegisterClients, Tweet, Top, MessageList, Start }
+import simulator.Messages.{ RegisterClients, Tweet, Top, MessageList, Start, TopMentions, TopNotifications, MentionList, NotificationList }
 import scala.collection.mutable.ListBuffer
 
 object ServerApp extends App {
@@ -25,10 +25,9 @@ object ServerShare {
  * 3. @ at beginning : any conversations between two persons p1 and p2 goes to homepage of followers of both p1 and p2
  * 	  @ not at beginning : source person p1's followers will have this message
  *    .@  : same as above
- * 3. direct message: send message to followers using dm @username message string
- * 4. retweet: RT @srcusername same message
- * 	  or same message via @srcusername
- * 5. hashtag
+ * 4. direct message: send message to followers using dm @username message string => done
+ * 5. retweet: RT @srcusername same message or same message via @srcusername => done
+ * 6. hashtag
  */
 class Server extends Actor {
 
@@ -49,6 +48,8 @@ class Server extends Actor {
     case Tweet(tweet) =>
       //println("Received " + tweet)
       var user = ServerShare.userMap(sender)
+      val rtPattern = "via @\\w+$".r
+      // Direct messaging
       if (tweet.startsWith("dm ")) {
         val toHandler = ("@\\w+".r findFirstIn tweet).mkString
         if (toHandler.length() > 0) {
@@ -56,7 +57,11 @@ class Server extends Actor {
           toUser.setUserName(toHandler.substring(1))
           ServerShare.usersList(ServerShare.usersList.indexOf(toUser)).addNotification(tweet)
         }
-
+      }
+      // Retweet with rt or via parameter
+      else if (tweet.startsWith(Messages.rtKeys(0)) || ("" != (rtPattern findFirstIn tweet).mkString)) {
+        for (follower <- user.getFollowers())
+          follower.addMessage(tweet)
       }
       else {
         var mentions = findMentions(tweet)
@@ -87,6 +92,14 @@ class Server extends Actor {
     case Top(n) =>
       var user = ServerShare.userMap(sender)
       sender ! MessageList(user.getRecentMessages(n))
+
+    case TopMentions(n) =>
+      var user = ServerShare.userMap(sender)
+      sender ! MentionList(user.getRecentMentions(n))
+
+    case TopNotifications(n) =>
+      var user = ServerShare.userMap(sender)
+      sender ! NotificationList(user.getRecentNotifications(n))
 
   }
 

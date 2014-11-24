@@ -2,7 +2,7 @@ package simulator
 
 import akka.actor.{ Actor, ActorSystem, Props, Scheduler, Cancellable, PoisonPill }
 import com.typesafe.config.ConfigFactory
-import simulator.Messages.{ Init, Tweet, Top, RouteClients, MessageList, PrintMessages, RegisterClients, ClientCompleted, ShutDown }
+import simulator.Messages.{ Init, Tweet, Top, RouteClients, MessageList, PrintMessages, RegisterClients, ClientCompleted, ShutDown, PrintMentions, PrintNotifications, TopMentions, TopNotifications, MentionList, NotificationList }
 import scala.util.Random
 import scala.util.control.Breaks._
 import scala.collection.mutable.ListBuffer
@@ -29,6 +29,7 @@ class Interactor() extends Actor {
   var nMessages : Int = 0
   var cancelMap : Map[User, Cancellable] = Map()
   var nCompleted : Int = 0
+  var queueCount : Int = 0
   for (i <- 0 to Messages.nClients - 1)
     clientList(i) = new User(i, context.actorOf(Props(new Client(i : Int))))
   //generateFollowers(Messages.nClients, Messages.mean)
@@ -69,17 +70,34 @@ class Interactor() extends Actor {
       for (i <- 0 to Messages.nClients - 1)
         clientList(i).getReference() ! Top(Messages.maxBufferSize)
 
+    case PrintNotifications =>
+      println("Printing notificatins")
+      for (user <- clientList)
+        user.getReference() ! TopNotifications(Messages.maxBufferSize)
+
+    case PrintMentions =>
+      println("Printing mentions")
+      for (user <- clientList)
+        user.getReference() ! TopMentions(Messages.maxBufferSize)
+
     case ClientCompleted =>
       nCompleted += 1
       if (nCompleted == Messages.nClients) {
-        serverActor ! Broadcast(PoisonPill)
-        context.system.shutdown()
+        nCompleted = 0
+        queueCount += 1
+        queueCount match {
+          case 1 => self ! PrintNotifications
+          case 2 => self ! PrintMentions
+          case 3 =>
+            serverActor ! Broadcast(PoisonPill)
+            context.system.shutdown()
+        }
       }
 
   }
 
   def sendMsg(curUser : User) = {
-    println(nMessages)
+    //println(nMessages)
     nMessages += 1
     if (nMessages == Messages.msgLimit) {
       println("Limit reached!")
@@ -96,12 +114,12 @@ class Interactor() extends Actor {
   }
 
   def directMessage() {
-    val rand = new Random()
+    val rand = Random
+    // No of direct message = no of clients
     for (user <- clientList) {
       val followers = user.getFollowers()
       if (followers.size != 0) {
         val count = rand.nextInt(followers.size)
-        println("Count " + count)
         for (i <- 0 until count) {
           val toAddr = "dm @" + followers(rand.nextInt(followers.size)).getName()
           user.getReference() ! Tweet(toAddr + " " + randomString(140 - toAddr.length() - 1))
@@ -111,7 +129,42 @@ class Interactor() extends Actor {
   }
 
   def reTweet() {
-    //TODO Pending feature
+    //No of retweets = no of clients
+    val rtKeys = Messages.rtKeys
+    val rand = Random
+    val nClients = clientList.size
+    for (i <- 0 to nClients) {
+      val curUser = clientList(rand.nextInt(nClients))
+      val twUser = clientList(rand.nextInt(nClients))
+      if (!curUser.equals(twUser)) {
+        var rtIdx = rand.nextInt(rtKeys.size)
+        var tweet = ""
+        if (rtIdx == 0)
+          tweet = rtKeys(rtIdx) + twUser.getName() + " "
+        else
+          tweet = " " + rtKeys(rtIdx) + twUser.getName()
+
+        breakable {
+          while (true) {
+            val messages = twUser.getMessages()
+            if (messages.size > 0) {
+              val pickIdx = rand.nextInt(messages.size)
+              //println(pickIdx + " vs " + messages.size)
+              val tweetString = messages.get(pickIdx)
+              if (tweetString.size + tweet.size <= 140) {
+                if (rtIdx == 0)
+                  tweet = tweet + tweetString
+                else
+                  tweet = tweetString + tweet
+                break
+              }
+            }
+          }
+          throw new Exception("Exception at retweeting string")
+        }
+        curUser.getReference() ! Tweet(tweet)
+      }
+    }
     self ! PrintMessages
   }
 
@@ -361,8 +414,24 @@ class Client(identifier : Int) extends Actor {
     case Top(n) =>
       serverActor ! Top(n)
 
+    case TopMentions(n) =>
+      serverActor ! TopMentions(n)
+
+    case TopNotifications(n) =>
+      serverActor ! TopNotifications(n)
+
     case MessageList(msgList) =>
       println("Received top messages for client: " + identifier)
+      msgList.foreach(println)
+      ClientApp.interActor ! ClientCompleted
+
+    case MentionList(msgList) =>
+      println("Received top mentions for client: " + identifier)
+      msgList.foreach(println)
+      ClientApp.interActor ! ClientCompleted
+
+    case NotificationList(msgList) =>
+      println("Received top notifications for client: " + identifier)
       msgList.foreach(println)
       ClientApp.interActor ! ClientCompleted
 
