@@ -13,6 +13,8 @@ object Messages {
   val mean : Int = 200
   val avgFollowers : Int = 50
   val avgTweetLength : Int = 28
+  val maxBufferSize : Int = 100
+  val keyWords = List("rt", "dm")
 
   sealed trait TwitterMessage
   case object Init extends TwitterMessage

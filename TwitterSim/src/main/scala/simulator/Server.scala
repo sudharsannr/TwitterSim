@@ -18,6 +18,18 @@ object ServerShare {
   var usersList : ListBuffer[User] = ListBuffer.empty[User]
 }
 
+/**
+ * Functionalities = Homepage / Mentions feed / Notifications
+ * 1. any messages that I type goes to my followers.
+ * 2. mention of @username always goes to mention feed of username
+ * 3. @ at beginning : any conversations between two persons p1 and p2 goes to homepage of followers of both p1 and p2
+ * 	  @ not at beginning : source person p1's followers will have this message
+ *    .@  : same as above
+ * 3. direct message: send message to followers using dm @username message string
+ * 4. retweet: RT @srcusername same message
+ * 	  or same message via @srcusername
+ * 5. hashtag
+ */
 class Server extends Actor {
 
   def receive = {
@@ -37,21 +49,40 @@ class Server extends Actor {
     case Tweet(tweet) =>
       //println("Received " + tweet)
       var user = ServerShare.userMap(sender)
-      var mentions = findMentions(tweet)
-      for (usersMentioned <- mentions) {
-
-        var tempUser = new User(0, null)
-        tempUser.setUserName(usersMentioned)
-        var mentionedUserObj = ServerShare.usersList(ServerShare.usersList.indexOf(tempUser))
-        mentionedUserObj.addMessage(tweet)
-
-        var mutualFollowers = findMutualFollowers(mentionedUserObj, user)
-        for (mFollowers <- mutualFollowers) {
-          mFollowers.addMessage(tweet)
+      if (tweet.startsWith("dm ")) {
+        val toHandler = ("@\\w+".r findFirstIn tweet).mkString
+        if (toHandler.length() > 0) {
+          val toUser = new User(0, null)
+          toUser.setUserName(toHandler.substring(1))
+          ServerShare.usersList(ServerShare.usersList.indexOf(toUser)).addNotification(tweet)
         }
 
       }
-      user.addMessage(tweet)
+      else {
+        var mentions = findMentions(tweet)
+        for (usersMentioned <- mentions) {
+
+          var tempUser = new User(0, null)
+          tempUser.setUserName(usersMentioned)
+
+          // Functionality 2
+          var mentionedUserObj = ServerShare.usersList(ServerShare.usersList.indexOf(tempUser))
+          //TODO Check if correct
+          mentionedUserObj.addMention(tweet)
+
+          var mutualFollowers = findMutualFollowers(mentionedUserObj, user)
+          for (mFollowers <- mutualFollowers) {
+            mFollowers.addMessage(tweet)
+          }
+
+          // Functionality 1
+          for (follower <- user.getFollowers())
+            follower.addMessage(tweet)
+
+        }
+        user.addMessage(tweet)
+
+      }
 
     case Top(n) =>
       var user = ServerShare.userMap(sender)
@@ -69,7 +100,9 @@ class Server extends Actor {
     for (tFollowers <- tweetersFollowers) {
       for (mFollowers <- mentionedFollowers) {
         if (tFollowers.equals(mFollowers)) {
-          mutualFollowers += tFollowers
+          //TODO @sarghau check if this condition is valid. Resulted in same follower added to list
+          if (!mutualFollowers.contains(tFollowers))
+            mutualFollowers += tFollowers
         }
       }
     }

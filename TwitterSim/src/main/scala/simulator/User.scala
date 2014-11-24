@@ -14,13 +14,19 @@ class User(id : Int, actorRef : ActorRef) {
   var msgRate : Int = 0
   var followers : ListBuffer[User] = ListBuffer.empty[User]
   var following : ListBuffer[User] = ListBuffer.empty[User]
+  val maxSize = Messages.maxBufferSize
   var messageQueue : Queue[String] = new Queue[String]
+  var mentions : Queue[String] = new Queue[String]
+  var notifications : Queue[String] = new Queue[String]
+  messageQueue.sliding(maxSize)
+  mentions.sliding(maxSize)
+  notifications.sliding(maxSize)
 
   override def equals(o : Any) = o match {
-    case that : User => that.userName.equals(this.userName) 
-   // println("That Username: ============"+that.userName)
+    case that : User => that.userName.equals(this.userName)
+    // println("That Username: ============"+that.userName)
     case _ => false
-    
+
   }
 
   override def hashCode = identifier.hashCode
@@ -32,10 +38,14 @@ class User(id : Int, actorRef : ActorRef) {
   def getRecentMessages(n : Int) : ListBuffer[String] = {
     var msgList : ListBuffer[String] = ListBuffer.empty[String]
     var i = 0
-      while (i < n && !messageQueue.isEmpty) {
-        msgList += messageQueue.dequeue()
+    while (i < n && !messageQueue.isEmpty) {
+      var msg = messageQueue.dequeue()
+      //TODO Message queue has null
+      if (null != msg) {
+        msgList += msg
         i += 1
       }
+    }
     return msgList
   }
 
@@ -84,15 +94,23 @@ class User(id : Int, actorRef : ActorRef) {
   }
 
   def addMessage(message : String) {
-    messageQueue.enqueue(message)
+      messageQueue.enqueue(message)
   }
 
   def setMessageRate(newMsgRate : Int) {
     msgRate = newMsgRate
   }
-  
+
   def setUserName(newUserName : String) {
     userName = newUserName
+  }
+
+  def addMention(message : String) {
+      mentions.enqueue(message)
+  }
+
+  def addNotification(message : String) {
+      notifications.enqueue(message)
   }
 
 }

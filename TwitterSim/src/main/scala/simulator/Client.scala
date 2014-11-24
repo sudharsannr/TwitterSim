@@ -8,7 +8,7 @@ import scala.util.control.Breaks._
 import scala.collection.mutable.ListBuffer
 import scala.io.Source
 import scala.concurrent.duration._
-import akka.routing.{FromConfig, RoundRobinRouter, Broadcast}
+import akka.routing.{ FromConfig, RoundRobinRouter, Broadcast }
 
 object ClientApp extends App {
 
@@ -66,13 +66,12 @@ class Interactor() extends Actor {
 
     case PrintMessages =>
       println("Printing messages")
-      for (i <- 0 to Messages.nClients - 1) 
-        clientList(i).getReference() ! Top(100)
-        
+      for (i <- 0 to Messages.nClients - 1)
+        clientList(i).getReference() ! Top(Messages.maxBufferSize)
+
     case ClientCompleted =>
       nCompleted += 1
-      if(nCompleted == Messages.nClients )
-      {
+      if (nCompleted == Messages.nClients) {
         serverActor ! Broadcast(PoisonPill)
         context.system.shutdown()
       }
@@ -86,13 +85,34 @@ class Interactor() extends Actor {
       println("Limit reached!")
       for (cancellable <- cancelMap.values)
         cancellable.cancel()
-      self ! PrintMessages
+      directMessage()
+      reTweet()
     }
     if (nMessages < Messages.msgLimit) {
       var rndTweet = randomTweet(curUser)
       //println(curUser + " ---> " + rndTweet)
       curUser.getReference() ! Tweet(rndTweet)
     }
+  }
+
+  def directMessage() {
+    val rand = new Random()
+    for (user <- clientList) {
+      val followers = user.getFollowers()
+      if (followers.size != 0) {
+        val count = rand.nextInt(followers.size)
+        println("Count " + count)
+        for (i <- 0 until count) {
+          val toAddr = "dm @" + followers(rand.nextInt(followers.size)).getName()
+          user.getReference() ! Tweet(toAddr + " " + randomString(140 - toAddr.length() - 1))
+        }
+      }
+    }
+  }
+
+  def reTweet() {
+    //TODO Pending feature
+    self ! PrintMessages
   }
 
   def randomTweet(curUser : User) : String = {
@@ -211,7 +231,16 @@ class Interactor() extends Actor {
         throw new Exception("Exception at infinite while")
       }
     }*/
-    sb.append(r.alphanumeric.take(length).mkString)
+    breakable {
+      while (true) {
+        val newString = r.alphanumeric.take(length).mkString
+        if (!Messages.keyWords.contains(newString)) {
+          sb.append(newString)
+          break
+        }
+      }
+      throw new Exception("Exception at generating string")
+    }
     return sb.toString
   }
 
@@ -262,7 +291,7 @@ class Interactor() extends Actor {
     val avgRate = minRate + (maxRate - minRate) / 2
     for (i <- startIdx until endIdx) {
       var newRate = minRate + r.nextInt(maxRate - minRate + 1)
-      if(newRate == 0)
+      if (newRate == 0)
         newRate += 1
       clientList(i).setMessageRate(newRate)
     }
@@ -335,8 +364,8 @@ class Client(identifier : Int) extends Actor {
     case MessageList(msgList) =>
       println("Received top messages for client: " + identifier)
       msgList.foreach(println)
-      ClientApp.interActor  ! ClientCompleted
-      
+      ClientApp.interActor ! ClientCompleted
+
   }
 
 }

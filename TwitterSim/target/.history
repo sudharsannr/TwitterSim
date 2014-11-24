@@ -46,3 +46,19 @@ compile
 run
 clean
 run
+clean
+compile
+compile -deprecation
+run
+q
+exit
+clean
+compile
+eclipse
+exit
+compile
+run
+exit
+eclipse
+compile
+exit
