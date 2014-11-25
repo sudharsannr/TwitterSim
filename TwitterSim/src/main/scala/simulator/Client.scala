@@ -14,9 +14,12 @@ object ClientApp extends App {
 
   // TODO Stop when complete
   //val ipAddr : String = args(0)
+	val ipAddr : String = "192.168.0.10:8248"
   val system = ActorSystem("TwitterClientActor", ConfigFactory.load("applicationClient.conf"))
   //val serverActor = system.actorOf(Props[Server])
-  val serverActor = system.actorOf(Props[Server].withRouter(RoundRobinRouter(nrOfInstances = 4)), "serverRouter")
+  val serverActor = system.actorSelection("akka.tcp://TwitterActor@"+ipAddr+"/user/Server")
+  //val serverActor = system.actorOf(Props[Server].withRouter(RoundRobinRouter(nrOfInstances = 4)), "serverRouter")
+  		
   val interActor = system.actorOf(Props(new Interactor()))
   var nRequests : Int = 0
   val startTime = java.lang.System.currentTimeMillis()
@@ -38,15 +41,15 @@ class Interactor() extends Actor {
   //generateFollowers(Messages.nClients, Messages.mean)
   readFollowersStats(Messages.nClients)
   readUserRateStats(Messages.nClients)
-  /*for (user <- clientList)
-    println(user)*/
-  /*for(user <- clientList)
-  {
-	  printf(user.getName() + ":")
-	  for(follower <- user.getFollowers())
-		  printf(follower.getName() + ", ")
-	  println()
-  }*/
+//  for (user <- clientList)
+//    println(user)
+//  for(user <- clientList)
+//  {
+//	  printf(user.getName() + ":")
+//	  for(follower <- user.getFollowers())
+//		  printf(follower.getName() + ", ")
+//	  println()
+//  }
 
   def receive = {
 
