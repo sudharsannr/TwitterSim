@@ -62,3 +62,17 @@ exit
 eclipse
 compile
 exit
+reload
+compile
+exit
+compile
+exit
+compile
+reload
+compile
+reload
+compile
+exit
+compile
+eclipse
+exit
