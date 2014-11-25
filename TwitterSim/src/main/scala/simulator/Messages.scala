@@ -16,6 +16,7 @@ object Messages {
   val maxBufferSize : Int = 100
   val keyWords = List("rt", "dm")
   val rtKeys = List("rt @", "via @")
+  val maxMentions : Int = 6
 
   sealed trait TwitterMessage
   case object Init extends TwitterMessage

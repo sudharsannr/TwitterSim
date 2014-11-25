@@ -5,7 +5,7 @@ import com.typesafe.config.ConfigFactory
 import simulator.Messages.{ Init, Tweet, Top, RouteClients, MessageList, PrintMessages, RegisterClients, ClientCompleted, ShutDown, PrintMentions, PrintNotifications, TopMentions, TopNotifications, MentionList, NotificationList }
 import scala.util.Random
 import scala.util.control.Breaks._
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.{ ListBuffer, ArrayBuffer }
 import scala.io.Source
 import scala.concurrent.duration._
 import akka.routing.{ FromConfig, RoundRobinRouter, Broadcast }
@@ -174,6 +174,7 @@ class Interactor() extends Actor {
     RandomPicker.pickRandom(TweetStrAt) match {
       case TweetStrAt.withoutAt => randomString(tweetLength)
       case TweetStrAt.withAt =>
+        var nMentions = 1 + Random.nextInt(Messages.maxMentions)
         RandomPicker.pickRandom(TweetStrAtPos) match {
           case TweetStrAtPos.atBeginning =>
             RandomPicker.pickRandom(TweetStrTo) match {
@@ -182,31 +183,46 @@ class Interactor() extends Actor {
                 var r = new Random()
                 var nFollowers = followers.length
                 if (nFollowers == 0) {
-                  while (true) {
+                  var handler = StringBuilder.newBuilder
+                  for (i <- 0 until nMentions) {
                     var idx = r.nextInt(Messages.nClients)
-                    if (idx != curUser.getID()) {
-                      var handler = StringBuilder.newBuilder.++=("@").++=(clientList(idx).getName())
-                      return handler.mkString + " " + randomString(tweetLength - handler.length)
-                    }
+                    while (idx == curUser.getID())
+                      idx = r.nextInt(Messages.nClients)
+                    handler.++=("@").++=(clientList(idx).getName()).++=(" ")
                   }
-                  throw new Exception("Exception at infinite while")
+                  if (tweetLength <= handler.length)
+                    tweetLength = 140
+                  return handler.mkString + randomString(tweetLength - handler.length)
                 }
                 else {
-                  var randVal = r.nextInt(nFollowers)
-                  var follower = followers(randVal)
-                  var handler = StringBuilder.newBuilder.++=("@").++=(follower.getName())
-                  return handler.mkString + " " + randomString(tweetLength - handler.length)
+                  var handler = StringBuilder.newBuilder
+                  var followerList = ArrayBuffer.empty[User]
+                  var i : Int = 0
+                  while (i < nMentions) {
+                    var follower = followers(r.nextInt(nFollowers))
+                    if (!followerList.contains(follower)) {
+                      followerList.+=(follower)
+                      i += 1
+                    }
+                  }
+                  for (follower <- followerList)
+                    handler.++=("@").++=(follower.getName()).++=(" ")
+                  if (tweetLength <= handler.length)
+                    tweetLength = 140
+                  return handler.mkString + randomString(tweetLength - handler.length)
                 }
               case TweetStrTo.toRandomUser =>
                 var r = new Random()
-                while (true) {
+                var handler = StringBuilder.newBuilder
+                for (i <- 0 until nMentions) {
                   var idx = r.nextInt(Messages.nClients)
-                  if (idx != curUser.getID()) {
-                    var handler = StringBuilder.newBuilder.++=("@").++=(clientList(idx).getName())
-                    return handler.mkString + " " + randomString(tweetLength - handler.length)
-                  }
+                  while (idx == curUser.getID())
+                    idx = r.nextInt(Messages.nClients)
+                  handler.++=("@").++=(clientList(idx).getName()).++=(" ")
                 }
-                throw new Exception("Exception at infinite while")
+                if (tweetLength <= handler.length)
+                  tweetLength = 140
+                return handler.mkString + randomString(tweetLength - handler.length)
             }
           case TweetStrAtPos.atNotBeginning =>
             RandomPicker.pickRandom(TweetStrTo) match {
@@ -214,57 +230,82 @@ class Interactor() extends Actor {
                 var followers = curUser.getFollowers()
                 var r = new Random()
                 var nFollowers = followers.length
+                var handler = StringBuilder.newBuilder
                 if (nFollowers == 0) {
-                  while (true) {
+                  for (i <- 0 until nMentions) {
                     var idx = r.nextInt(Messages.nClients)
-                    if (idx != curUser.getID()) {
-                      var handler = StringBuilder.newBuilder.++=("@").++=(clientList(idx).getName())
-                      var remChars = tweetLength - handler.length - 1
-                      var str1Len = r.nextInt(remChars) + 1
-                      var str1 : String = randomString(str1Len)
-                      var str2 : String = ""
-                      var splitIdx = remChars - str1Len
-                      if (splitIdx > 0)
-                        str2 = randomString(splitIdx - 1)
-                      return str1 + " " + handler.toString + " " + str2
-                    }
+                    while (idx == curUser.getID())
+                      idx = r.nextInt(Messages.nClients)
+                    handler.++=("@").++=(clientList(idx).getName()).++=(" ")
                   }
-                  throw new Exception("Exception at infinite while")
-                }
-                else {
-                  var randVal = r.nextInt(nFollowers)
-                  var follower = followers(randVal)
-                  var handler = StringBuilder.newBuilder.++=("@").++=(follower.getName())
+                  if (tweetLength <= handler.length)
+                    tweetLength = 140
                   var remChars = tweetLength - handler.length - 1
-                  var str1Len = r.nextInt(remChars) + 1
+                  var str1Len = r.nextInt(remChars)
                   var str1 : String = randomString(str1Len)
                   var str2 : String = ""
                   var splitIdx = remChars - str1Len
                   if (splitIdx > 0)
-                    str2 = randomString(splitIdx - 1)
-                  return str1 + " " + handler.toString + " " + str2
+                    str2 = randomString(splitIdx)
+                  return str1 + " " + handler.toString + str2
+                }
+                else {
+                  var remChars = -1
+                  while (remChars < 0) {
+                    var handler = StringBuilder.newBuilder
+                    var followerList = ArrayBuffer.empty[User]
+                    var i : Int = 0
+                    while (i < nMentions) {
+                      var follower = followers(r.nextInt(nFollowers))
+                      if (!followerList.contains(follower)) {
+                        followerList.+=(follower)
+                        i += 1
+                      }
+                    }
+                    for (follower <- followerList)
+                      handler.++=("@").++=(follower.getName()).++=(" ")
+                    if (tweetLength <= handler.length)
+                      tweetLength = 140
+                    remChars = tweetLength - handler.length - 1
+                    if (remChars == 0 && tweetLength < 140)
+                      remChars += Messages.avgTweetLength
+                  }
+                  var str1Len = r.nextInt(remChars)
+                  var str1 : String = randomString(str1Len)
+                  var str2 : String = ""
+                  var splitIdx = remChars - str1Len
+                  if (splitIdx > 0)
+                    str2 = randomString(splitIdx)
+                  return str1 + " " + handler.toString + str2
                 }
               case TweetStrTo.toRandomUser =>
+                var remChars = -1
                 var r = new Random()
-                while (true) {
-                  var idx = r.nextInt(Messages.nClients)
-                  if (idx != curUser.getID()) {
-                    var handler = StringBuilder.newBuilder.++=("@").++=(clientList(idx).getName())
-                    var remChars = tweetLength - handler.length - 1
-                    var str1Len = r.nextInt(remChars) + 1
-                    var str1 : String = randomString(str1Len)
-                    var str2 : String = ""
-                    var splitIdx = remChars - str1Len
-                    if (splitIdx > 0)
-                      str2 = randomString(splitIdx - 1)
-                    return str1 + " " + handler.toString + " " + str2
+                var handler : StringBuilder = null
+                while (remChars < 0) {
+                  handler = StringBuilder.newBuilder
+                  for (i <- 0 until nMentions) {
+                    var idx = r.nextInt(Messages.nClients)
+                    while (idx == curUser.getID())
+                      idx = r.nextInt(Messages.nClients)
+                    handler.++=("@").++=(clientList(idx).getName())
                   }
+                  if (tweetLength <= handler.length)
+                    tweetLength = 140
+                  remChars = tweetLength - handler.length - 1
+                  if (remChars == 0 && tweetLength < 140)
+                    remChars += Messages.avgTweetLength
                 }
-                throw new Exception("Exception at infinite while")
+                var str1Len = r.nextInt(remChars)
+                var str1 : String = randomString(str1Len)
+                var str2 : String = ""
+                var splitIdx = remChars - str1Len
+                if (splitIdx > 0)
+                  str2 = randomString(splitIdx)
+                return str1 + " " + handler.toString + str2
             }
         }
     }
-
   }
 
   def randomString(length : Int) : String = {
