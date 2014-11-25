@@ -97,7 +97,6 @@ class Interactor() extends Actor {
             context.system.shutdown()
         }
       }
-
   }
 
   def sendMsg(curUser : User) = {
