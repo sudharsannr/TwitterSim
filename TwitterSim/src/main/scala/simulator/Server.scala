@@ -1,6 +1,7 @@
 package simulator
 
 import akka.actor.{ ActorSystem, Props, Actor, ActorRef }
+import com.typesafe.config.ConfigFactory
 import simulator.Messages.{ RegisterClients, Tweet, Top, MessageList, Start, TopMentions, TopNotifications, MentionList, NotificationList }
 import scala.collection.mutable.ListBuffer
 import scala.util.control.Breaks._
@@ -45,6 +46,7 @@ class Server extends Actor {
         ServerShare.userMap += (userActor -> curUser)
         ServerShare.usersList += curUser
         userActor ! "ACK"
+       
       }
 
     case Tweet(tweet) =>
@@ -99,11 +101,12 @@ class Server extends Actor {
       		var newIndex = tweet.indexOf('@', index)
       		
       		while (newIndex != -1) {
-      			username = findMentionedUsername(tweet, newIndex)
+      			username = findMentionedUsername(tweet, newIndex+1)
           	index = newIndex + username.length() + 1
           	
           	var mentionedExtraUsers = new User(0, null)
 	          mentionedExtraUsers.setUserName(username)
+	          
 	          var mentionedExtraUsersObj = ServerShare.usersList(ServerShare.usersList.indexOf(mentionedExtraUsers))
           	
 	         	mentionedExtraUsersObj.addMention(tweet)
@@ -142,7 +145,7 @@ class Server extends Actor {
           var newIndex = tweet.indexOf('@', index)
           while (newIndex != -1) {
           	
-          	username = findMentionedUsername(tweet, newIndex)
+          	username = findMentionedUsername(tweet, newIndex+1)
           	index = newIndex + username.length() + 1
           	
           	var mentionedExtraUsers = new User(0, null)

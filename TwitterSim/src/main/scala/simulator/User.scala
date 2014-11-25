@@ -7,7 +7,7 @@ import scala.util.control.Breaks._
 import scala.collection.mutable.Queue
 import scala.collection.mutable.Map
 
-class User(id : Int, actorRef : ActorRef) {
+class User(id : Int, actorRef : ActorRef) extends Serializable {
   val identifier : Int = id
   var userName : String = Random.alphanumeric.take(4 + Random.nextInt(12)).mkString
   val actor : ActorRef = actorRef

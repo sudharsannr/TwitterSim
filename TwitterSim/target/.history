@@ -62,3 +62,12 @@ exit
 eclipse
 compile
 exit
+run
+reload
+eclipse
+clean
+cleean
+clean
+run
+clean
+run
