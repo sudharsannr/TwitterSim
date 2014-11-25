@@ -231,16 +231,19 @@ class Interactor() extends Actor {
                 var r = new Random()
                 var nFollowers = followers.length
                 var handler = StringBuilder.newBuilder
+                var remChars = -1
                 if (nFollowers == 0) {
-                  for (i <- 0 until nMentions) {
-                    var idx = r.nextInt(Messages.nClients)
-                    while (idx == curUser.getID())
-                      idx = r.nextInt(Messages.nClients)
-                    handler.++=("@").++=(clientList(idx).getName()).++=(" ")
+                  while (remChars < 1) {
+                    for (i <- 0 until nMentions) {
+                      var idx = r.nextInt(Messages.nClients)
+                      while (idx == curUser.getID())
+                        idx = r.nextInt(Messages.nClients)
+                      handler.++=("@").++=(clientList(idx).getName()).++=(" ")
+                    }
+                    if (tweetLength <= handler.length)
+                      tweetLength = 140
+                    remChars = tweetLength - handler.length - 1
                   }
-                  if (tweetLength <= handler.length)
-                    tweetLength = 140
-                  var remChars = tweetLength - handler.length - 1
                   var str1Len = r.nextInt(remChars)
                   var str1 : String = randomString(str1Len)
                   var str2 : String = ""
@@ -251,7 +254,7 @@ class Interactor() extends Actor {
                 }
                 else {
                   var remChars = -1
-                  while (remChars < 0) {
+                  while (remChars < 1) {
                     var handler = StringBuilder.newBuilder
                     var followerList = ArrayBuffer.empty[User]
                     var i : Int = 0
@@ -282,7 +285,7 @@ class Interactor() extends Actor {
                 var remChars = -1
                 var r = new Random()
                 var handler : StringBuilder = null
-                while (remChars < 0) {
+                while (remChars < 1) {
                   handler = StringBuilder.newBuilder
                   for (i <- 0 until nMentions) {
                     var idx = r.nextInt(Messages.nClients)
@@ -325,15 +328,14 @@ class Interactor() extends Actor {
         throw new Exception("Exception at infinite while")
       }
     }*/
-    breakable {
-      while (true) {
-        val newString = r.alphanumeric.take(length).mkString
-        if (!Messages.keyWords.contains(newString)) {
-          sb.append(newString)
-          break
-        }
-      }
-      throw new Exception("Exception at generating string")
+    var targetLength = length
+    while (targetLength > 0) {
+      val newString = r.alphanumeric.take(1 + r.nextInt(targetLength)).mkString
+      if (!Messages.keyWords.contains(newString))
+        sb.append(newString)
+      if (sb.length < targetLength)
+        sb.append(" ")
+      targetLength -= sb.length
     }
     return sb.toString
   }
