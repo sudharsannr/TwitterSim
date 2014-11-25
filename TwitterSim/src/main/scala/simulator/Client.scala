@@ -14,12 +14,12 @@ object ClientApp extends App {
 
   // TODO Stop when complete
   //val ipAddr : String = args(0)
-	val ipAddr : String = "192.168.0.10:8248"
+  val ipAddr : String = "127.0.0.1:8248"
   val system = ActorSystem("TwitterClientActor", ConfigFactory.load("applicationClient.conf"))
   //val serverActor = system.actorOf(Props[Server])
-  val serverActor = system.actorSelection("akka.tcp://TwitterActor@"+ipAddr+"/user/Server")
+  val serverActor = system.actorSelection("akka.tcp://TwitterActor@" + ipAddr + "/user/Server")
   //val serverActor = system.actorOf(Props[Server].withRouter(RoundRobinRouter(nrOfInstances = 4)), "serverRouter")
-  		
+
   val interActor = system.actorOf(Props(new Interactor()))
   var nRequests : Int = 0
   val startTime = java.lang.System.currentTimeMillis()
@@ -41,15 +41,15 @@ class Interactor() extends Actor {
   //generateFollowers(Messages.nClients, Messages.mean)
   readFollowersStats(Messages.nClients)
   readUserRateStats(Messages.nClients)
-//  for (user <- clientList)
-//    println(user)
-//  for(user <- clientList)
-//  {
-//	  printf(user.getName() + ":")
-//	  for(follower <- user.getFollowers())
-//		  printf(follower.getName() + ", ")
-//	  println()
-//  }
+  //  for (user <- clientList)
+  //    println(user)
+  //  for(user <- clientList)
+  //  {
+  //	  printf(user.getName() + ":")
+  //	  for(follower <- user.getFollowers())
+  //		  printf(follower.getName() + ", ")
+  //	  println()
+  //  }
 
   def receive = {
 
@@ -59,8 +59,8 @@ class Interactor() extends Actor {
     case RouteClients =>
       val rand = new Random();
       for (curUser <- clientList) {
-        val intervalRate = curUser.getMsgRate.seconds
-        val cancellable = actorSys.scheduler.schedule(0.seconds, intervalRate)(sendMsg(curUser))
+        val intervalRate = curUser.getMsgRate.milliseconds
+        val cancellable = actorSys.scheduler.schedule(0.milliseconds, intervalRate)(sendMsg(curUser))
         cancelMap += (curUser -> cancellable)
       }
     /*for (i <- 0 to Messages.msgLimit - 1) {
@@ -100,7 +100,7 @@ class Interactor() extends Actor {
   }
 
   def sendMsg(curUser : User) = {
-    //println(nMessages)
+    println(nMessages)
     nMessages += 1
     if (nMessages == Messages.msgLimit) {
       println("Limit reached!")
@@ -111,13 +111,13 @@ class Interactor() extends Actor {
     }
     if (nMessages < Messages.msgLimit) {
       val curSec = java.lang.System.currentTimeMillis()
-      val curTime = ((curSec - ClientApp.startTime).toDouble )/1000
+      val curTime = ((curSec - ClientApp.startTime).toDouble) / 1000
       if (curTime >= Messages.peakStart && curTime < Messages.peakEnd) {
         for (i <- 0 to Messages.peakScale) {
           var rndTweet = randomTweet(curUser)
           curUser.getReference() ! Tweet(rndTweet)
         }
-        nMessages += Messages.peakScale - 1 
+        nMessages += Messages.peakScale - 1
       }
       else {
         var rndTweet = randomTweet(curUser)
@@ -128,6 +128,7 @@ class Interactor() extends Actor {
   }
 
   def directMessage() {
+    println("Direct Message")
     val rand = Random
     // No of direct message = no of clients
     for (user <- clientList) {
@@ -136,6 +137,7 @@ class Interactor() extends Actor {
         val count = rand.nextInt(followers.size)
         for (i <- 0 until count) {
           val toAddr = "dm @" + followers(rand.nextInt(followers.size)).getName()
+          println(i)
           user.getReference() ! Tweet(toAddr + " " + randomString(140 - toAddr.length() - 1))
         }
       }
@@ -144,12 +146,14 @@ class Interactor() extends Actor {
 
   def reTweet() {
     //No of retweets = no of clients
+    println("ReTweet")
     val rtKeys = Messages.rtKeys
     val rand = Random
     val nClients = clientList.size
     for (i <- 0 to nClients) {
       val curUser = clientList(rand.nextInt(nClients))
       val twUser = clientList(rand.nextInt(nClients))
+      println(i)
       if (!curUser.equals(twUser)) {
         var rtIdx = rand.nextInt(rtKeys.size)
         var tweet = ""
@@ -158,23 +162,18 @@ class Interactor() extends Actor {
         else
           tweet = " " + rtKeys(rtIdx) + twUser.getName()
 
-        breakable {
-          while (true) {
-            val messages = twUser.getMessages()
-            if (messages.size > 0) {
-              val pickIdx = rand.nextInt(messages.size)
-              //println(pickIdx + " vs " + messages.size)
-              val tweetString = messages.get(pickIdx)
-              if (tweetString.size + tweet.size <= 140) {
-                if (rtIdx == 0)
-                  tweet = tweet + tweetString
-                else
-                  tweet = tweetString + tweet
-                break
-              }
-            }
-          }
-          throw new Exception("Exception at retweeting string")
+        //FIXME Bug when checking if retweet + tweet <= 140 and infinite loop
+        val messages = twUser.getMessages()
+        if (messages.size > 0) {
+          val pickIdx = rand.nextInt(messages.size)
+          //println(pickIdx + " vs " + messages.size)
+          val tweetString = messages.get(pickIdx)
+          //if (tweetString.size + tweet.size <= 140) {
+          if (rtIdx == 0)
+            tweet = tweet + tweetString
+          else
+            tweet = tweetString + tweet
+          //}
         }
         curUser.getReference() ! Tweet(tweet)
       }
@@ -354,26 +353,26 @@ class Interactor() extends Actor {
     return sb.toString
   }
 
-//  def generateFollowers(usersCount : Int, mean : Int) {
-//    var r = new Random()
-//    var nFollowers : Int = 0
-//    for (i <- 0 until usersCount - 1) {
-//      nFollowers = r.nextInt(Messages.avgFollowers);
-//      val user = clientList(i)
-//      for (f <- 0 until nFollowers + 1) {
-//        breakable {
-//          while (true) {
-//            val fIdx = r.nextInt(usersCount)
-//            if (fIdx != i) {
-//              user.addFollower(clientList(fIdx))
-//              break
-//            }
-//          }
-//          throw new Exception("Exception at infinite while")
-//        }
-//      }
-//    }
-//  }
+  //  def generateFollowers(usersCount : Int, mean : Int) {
+  //    var r = new Random()
+  //    var nFollowers : Int = 0
+  //    for (i <- 0 until usersCount - 1) {
+  //      nFollowers = r.nextInt(Messages.avgFollowers);
+  //      val user = clientList(i)
+  //      for (f <- 0 until nFollowers + 1) {
+  //        breakable {
+  //          while (true) {
+  //            val fIdx = r.nextInt(usersCount)
+  //            if (fIdx != i) {
+  //              user.addFollower(clientList(fIdx))
+  //              break
+  //            }
+  //          }
+  //          throw new Exception("Exception at infinite while")
+  //        }
+  //      }
+  //    }
+  //  }
 
   def readUserRateStats(usersCount : Int) {
     val filename = "userRate_stats.txt"
@@ -443,10 +442,10 @@ class Interactor() extends Actor {
       val user = clientList(i)
 
       for (j <- 0 until noOfFollowers) {
-      	var id = r1.nextInt(usersCount)
-      	while (id == user.identifier) {
-      		id = r1.nextInt(usersCount)
-      	}
+        var id = r1.nextInt(usersCount)
+        while (id == user.identifier) {
+          id = r1.nextInt(usersCount)
+        }
         user.addFollower(clientList(id))
         val following = clientList(id)
         following.addFollowing(user)
