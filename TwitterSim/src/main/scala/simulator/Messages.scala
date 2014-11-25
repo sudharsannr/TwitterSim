@@ -17,6 +17,9 @@ object Messages {
   val keyWords = List("rt", "dm")
   val rtKeys = List("rt @", "via @")
   val maxMentions : Int = 6
+  val peakStart : Int = 20
+  val peakEnd : Int = 40
+  val peakScale : Int = 10
 
   sealed trait TwitterMessage
   case object Init extends TwitterMessage
