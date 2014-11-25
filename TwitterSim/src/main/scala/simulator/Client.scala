@@ -17,9 +17,9 @@ object ClientApp extends App {
   val ipAddr : String = "192.168.0.10:8248"
   val system = ActorSystem("TwitterClientActor", ConfigFactory.load("applicationClient.conf"))
   //val serverActor = system.actorOf(Props[Server])
-  val serverActor = system.actorSelection("akka.tcp://TwitterActor@" + ipAddr + "/user/Server")
-  //val serverActor = system.actorOf(Props[Server].withRouter(RoundRobinRouter(nrOfInstances = 4)), "serverRouter")
-
+  val sActor = system.actorFor("akka.tcp://TwitterActor@" + ipAddr + "/user/Server")
+  val serverVector = Vector.fill(Messages.nServers)(sActor)
+  val serverActor = system.actorOf(Props.empty.withRouter(RoundRobinRouter(routees = serverVector)), "serverRouter")
   val interActor = system.actorOf(Props(new Interactor()))
   var nRequests : Int = 0
   val startTime = java.lang.System.currentTimeMillis()
