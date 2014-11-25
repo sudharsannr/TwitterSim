@@ -15,12 +15,9 @@ class User(id : Int, actorRef : ActorRef) {
   var followers : ListBuffer[User] = ListBuffer.empty[User]
   var following : ListBuffer[User] = ListBuffer.empty[User]
   val maxSize = Messages.maxBufferSize
-  var messageQueue : Queue[String] = new Queue[String]
-  var mentions : Queue[String] = new Queue[String]
-  var notifications : Queue[String] = new Queue[String]
-  messageQueue.sliding(maxSize)
-  mentions.sliding(maxSize)
-  notifications.sliding(maxSize)
+  var messageQueue : Queue[String] = Queue.empty[String]
+  var mentions : Queue[String] = Queue.empty[String]
+  var notifications : Queue[String] = Queue.empty[String]
 
   override def equals(o : Any) = o match {
     case that : User => that.userName.equals(this.userName)
@@ -38,8 +35,39 @@ class User(id : Int, actorRef : ActorRef) {
   def getRecentMessages(n : Int) : ListBuffer[String] = {
     var msgList : ListBuffer[String] = ListBuffer.empty[String]
     var i = 0
-    while (i < n && !messageQueue.isEmpty) {
-      var msg = messageQueue.dequeue()
+    if (!messageQueue.isEmpty) {
+      var tempQueue = messageQueue.toList
+      while (i < n && i < tempQueue.size) {
+        var msg = tempQueue(i)
+        //TODO Message queue has null
+        if (null != msg) {
+          msgList += msg
+          i += 1
+        }
+      }
+    }
+    return msgList
+  }
+
+  def getRecentMentions(n : Int) : ListBuffer[String] = {
+    var msgList : ListBuffer[String] = ListBuffer.empty[String]
+    var i = 0
+    while (i < n && !mentions.isEmpty) {
+      var msg = mentions.dequeue()
+      //TODO Message queue has null
+      if (null != msg) {
+        msgList += msg
+        i += 1
+      }
+    }
+    return msgList
+  }
+
+  def getRecentNotifications(n : Int) : ListBuffer[String] = {
+    var msgList : ListBuffer[String] = ListBuffer.empty[String]
+    var i = 0
+    while (i < n && !notifications.isEmpty) {
+      var msg = notifications.dequeue()
       //TODO Message queue has null
       if (null != msg) {
         msgList += msg
@@ -94,7 +122,7 @@ class User(id : Int, actorRef : ActorRef) {
   }
 
   def addMessage(message : String) {
-      messageQueue.enqueue(message)
+    messageQueue.enqueue(message)
   }
 
   def setMessageRate(newMsgRate : Int) {
@@ -106,11 +134,11 @@ class User(id : Int, actorRef : ActorRef) {
   }
 
   def addMention(message : String) {
-      mentions.enqueue(message)
+    mentions.enqueue(message)
   }
 
   def addNotification(message : String) {
-      notifications.enqueue(message)
+    notifications.enqueue(message)
   }
 
 }

@@ -2,10 +2,10 @@ package simulator
 
 import akka.actor.{ Actor, ActorSystem, Props, Scheduler, Cancellable, PoisonPill }
 import com.typesafe.config.ConfigFactory
-import simulator.Messages.{ Init, Tweet, Top, RouteClients, MessageList, PrintMessages, RegisterClients, ClientCompleted, ShutDown }
+import simulator.Messages.{ Init, Tweet, Top, RouteClients, MessageList, PrintMessages, RegisterClients, ClientCompleted, ShutDown, PrintMentions, PrintNotifications, TopMentions, TopNotifications, MentionList, NotificationList }
 import scala.util.Random
 import scala.util.control.Breaks._
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.{ ListBuffer, ArrayBuffer }
 import scala.io.Source
 import scala.concurrent.duration._
 import akka.routing.{ FromConfig, RoundRobinRouter, Broadcast }
@@ -29,6 +29,7 @@ class Interactor() extends Actor {
   var nMessages : Int = 0
   var cancelMap : Map[User, Cancellable] = Map()
   var nCompleted : Int = 0
+  var queueCount : Int = 0
   for (i <- 0 to Messages.nClients - 1)
     clientList(i) = new User(i, context.actorOf(Props(new Client(i : Int))))
   //generateFollowers(Messages.nClients, Messages.mean)
@@ -69,17 +70,34 @@ class Interactor() extends Actor {
       for (i <- 0 to Messages.nClients - 1)
         clientList(i).getReference() ! Top(Messages.maxBufferSize)
 
+    case PrintNotifications =>
+      println("Printing notificatins")
+      for (user <- clientList)
+        user.getReference() ! TopNotifications(Messages.maxBufferSize)
+
+    case PrintMentions =>
+      println("Printing mentions")
+      for (user <- clientList)
+        user.getReference() ! TopMentions(Messages.maxBufferSize)
+
     case ClientCompleted =>
       nCompleted += 1
       if (nCompleted == Messages.nClients) {
-        serverActor ! Broadcast(PoisonPill)
-        context.system.shutdown()
+        nCompleted = 0
+        queueCount += 1
+        queueCount match {
+          case 1 => self ! PrintNotifications
+          case 2 => self ! PrintMentions
+          case 3 =>
+            serverActor ! Broadcast(PoisonPill)
+            context.system.shutdown()
+        }
       }
 
   }
 
   def sendMsg(curUser : User) = {
-    println(nMessages)
+    //println(nMessages)
     nMessages += 1
     if (nMessages == Messages.msgLimit) {
       println("Limit reached!")
@@ -96,12 +114,12 @@ class Interactor() extends Actor {
   }
 
   def directMessage() {
-    val rand = new Random()
+    val rand = Random
+    // No of direct message = no of clients
     for (user <- clientList) {
       val followers = user.getFollowers()
       if (followers.size != 0) {
         val count = rand.nextInt(followers.size)
-        println("Count " + count)
         for (i <- 0 until count) {
           val toAddr = "dm @" + followers(rand.nextInt(followers.size)).getName()
           user.getReference() ! Tweet(toAddr + " " + randomString(140 - toAddr.length() - 1))
@@ -111,7 +129,42 @@ class Interactor() extends Actor {
   }
 
   def reTweet() {
-    //TODO Pending feature
+    //No of retweets = no of clients
+    val rtKeys = Messages.rtKeys
+    val rand = Random
+    val nClients = clientList.size
+    for (i <- 0 to nClients) {
+      val curUser = clientList(rand.nextInt(nClients))
+      val twUser = clientList(rand.nextInt(nClients))
+      if (!curUser.equals(twUser)) {
+        var rtIdx = rand.nextInt(rtKeys.size)
+        var tweet = ""
+        if (rtIdx == 0)
+          tweet = rtKeys(rtIdx) + twUser.getName() + " "
+        else
+          tweet = " " + rtKeys(rtIdx) + twUser.getName()
+
+        breakable {
+          while (true) {
+            val messages = twUser.getMessages()
+            if (messages.size > 0) {
+              val pickIdx = rand.nextInt(messages.size)
+              //println(pickIdx + " vs " + messages.size)
+              val tweetString = messages.get(pickIdx)
+              if (tweetString.size + tweet.size <= 140) {
+                if (rtIdx == 0)
+                  tweet = tweet + tweetString
+                else
+                  tweet = tweetString + tweet
+                break
+              }
+            }
+          }
+          throw new Exception("Exception at retweeting string")
+        }
+        curUser.getReference() ! Tweet(tweet)
+      }
+    }
     self ! PrintMessages
   }
 
@@ -121,6 +174,7 @@ class Interactor() extends Actor {
     RandomPicker.pickRandom(TweetStrAt) match {
       case TweetStrAt.withoutAt => randomString(tweetLength)
       case TweetStrAt.withAt =>
+        var nMentions = 1 + Random.nextInt(Messages.maxMentions)
         RandomPicker.pickRandom(TweetStrAtPos) match {
           case TweetStrAtPos.atBeginning =>
             RandomPicker.pickRandom(TweetStrTo) match {
@@ -129,31 +183,46 @@ class Interactor() extends Actor {
                 var r = new Random()
                 var nFollowers = followers.length
                 if (nFollowers == 0) {
-                  while (true) {
+                  var handler = StringBuilder.newBuilder
+                  for (i <- 0 until nMentions) {
                     var idx = r.nextInt(Messages.nClients)
-                    if (idx != curUser.getID()) {
-                      var handler = StringBuilder.newBuilder.++=("@").++=(clientList(idx).getName())
-                      return handler.mkString + " " + randomString(tweetLength - handler.length)
-                    }
+                    while (idx == curUser.getID())
+                      idx = r.nextInt(Messages.nClients)
+                    handler.++=("@").++=(clientList(idx).getName()).++=(" ")
                   }
-                  throw new Exception("Exception at infinite while")
+                  if (tweetLength <= handler.length)
+                    tweetLength = 140
+                  return handler.mkString + randomString(tweetLength - handler.length)
                 }
                 else {
-                  var randVal = r.nextInt(nFollowers)
-                  var follower = followers(randVal)
-                  var handler = StringBuilder.newBuilder.++=("@").++=(follower.getName())
-                  return handler.mkString + " " + randomString(tweetLength - handler.length)
+                  var handler = StringBuilder.newBuilder
+                  var followerList = ArrayBuffer.empty[User]
+                  var i : Int = 0
+                  while (i < nMentions) {
+                    var follower = followers(r.nextInt(nFollowers))
+                    if (!followerList.contains(follower)) {
+                      followerList.+=(follower)
+                      i += 1
+                    }
+                  }
+                  for (follower <- followerList)
+                    handler.++=("@").++=(follower.getName()).++=(" ")
+                  if (tweetLength <= handler.length)
+                    tweetLength = 140
+                  return handler.mkString + randomString(tweetLength - handler.length)
                 }
               case TweetStrTo.toRandomUser =>
                 var r = new Random()
-                while (true) {
+                var handler = StringBuilder.newBuilder
+                for (i <- 0 until nMentions) {
                   var idx = r.nextInt(Messages.nClients)
-                  if (idx != curUser.getID()) {
-                    var handler = StringBuilder.newBuilder.++=("@").++=(clientList(idx).getName())
-                    return handler.mkString + " " + randomString(tweetLength - handler.length)
-                  }
+                  while (idx == curUser.getID())
+                    idx = r.nextInt(Messages.nClients)
+                  handler.++=("@").++=(clientList(idx).getName()).++=(" ")
                 }
-                throw new Exception("Exception at infinite while")
+                if (tweetLength <= handler.length)
+                  tweetLength = 140
+                return handler.mkString + randomString(tweetLength - handler.length)
             }
           case TweetStrAtPos.atNotBeginning =>
             RandomPicker.pickRandom(TweetStrTo) match {
@@ -161,57 +230,85 @@ class Interactor() extends Actor {
                 var followers = curUser.getFollowers()
                 var r = new Random()
                 var nFollowers = followers.length
+                var handler = StringBuilder.newBuilder
+                var remChars = -1
                 if (nFollowers == 0) {
-                  while (true) {
-                    var idx = r.nextInt(Messages.nClients)
-                    if (idx != curUser.getID()) {
-                      var handler = StringBuilder.newBuilder.++=("@").++=(clientList(idx).getName())
-                      var remChars = tweetLength - handler.length - 1
-                      var str1Len = r.nextInt(remChars) + 1
-                      var str1 : String = randomString(str1Len)
-                      var str2 : String = ""
-                      var splitIdx = remChars - str1Len
-                      if (splitIdx > 0)
-                        str2 = randomString(splitIdx - 1)
-                      return str1 + " " + handler.toString + " " + str2
+                  while (remChars < 1) {
+                    for (i <- 0 until nMentions) {
+                      var idx = r.nextInt(Messages.nClients)
+                      while (idx == curUser.getID())
+                        idx = r.nextInt(Messages.nClients)
+                      handler.++=("@").++=(clientList(idx).getName()).++=(" ")
                     }
+                    if (tweetLength <= handler.length)
+                      tweetLength = 140
+                    remChars = tweetLength - handler.length - 1
                   }
-                  throw new Exception("Exception at infinite while")
-                }
-                else {
-                  var randVal = r.nextInt(nFollowers)
-                  var follower = followers(randVal)
-                  var handler = StringBuilder.newBuilder.++=("@").++=(follower.getName())
-                  var remChars = tweetLength - handler.length - 1
-                  var str1Len = r.nextInt(remChars) + 1
+                  var str1Len = r.nextInt(remChars)
                   var str1 : String = randomString(str1Len)
                   var str2 : String = ""
                   var splitIdx = remChars - str1Len
                   if (splitIdx > 0)
-                    str2 = randomString(splitIdx - 1)
-                  return str1 + " " + handler.toString + " " + str2
+                    str2 = randomString(splitIdx)
+                  return str1 + " " + handler.toString + str2
+                }
+                else {
+                  var remChars = -1
+                  while (remChars < 1) {
+                    var handler = StringBuilder.newBuilder
+                    var followerList = ArrayBuffer.empty[User]
+                    var i : Int = 0
+                    while (i < nMentions) {
+                      var follower = followers(r.nextInt(nFollowers))
+                      if (!followerList.contains(follower)) {
+                        followerList.+=(follower)
+                        i += 1
+                      }
+                    }
+                    for (follower <- followerList)
+                      handler.++=("@").++=(follower.getName()).++=(" ")
+                    if (tweetLength <= handler.length)
+                      tweetLength = 140
+                    remChars = tweetLength - handler.length - 1
+                    if (remChars == 0 && tweetLength < 140)
+                      remChars += Messages.avgTweetLength
+                  }
+                  var str1Len = r.nextInt(remChars)
+                  var str1 : String = randomString(str1Len)
+                  var str2 : String = ""
+                  var splitIdx = remChars - str1Len
+                  if (splitIdx > 0)
+                    str2 = randomString(splitIdx)
+                  return str1 + " " + handler.toString + str2
                 }
               case TweetStrTo.toRandomUser =>
+                var remChars = -1
                 var r = new Random()
-                while (true) {
-                  var idx = r.nextInt(Messages.nClients)
-                  if (idx != curUser.getID()) {
-                    var handler = StringBuilder.newBuilder.++=("@").++=(clientList(idx).getName())
-                    var remChars = tweetLength - handler.length - 1
-                    var str1Len = r.nextInt(remChars) + 1
-                    var str1 : String = randomString(str1Len)
-                    var str2 : String = ""
-                    var splitIdx = remChars - str1Len
-                    if (splitIdx > 0)
-                      str2 = randomString(splitIdx - 1)
-                    return str1 + " " + handler.toString + " " + str2
+                var handler : StringBuilder = null
+                while (remChars < 1) {
+                  handler = StringBuilder.newBuilder
+                  for (i <- 0 until nMentions) {
+                    var idx = r.nextInt(Messages.nClients)
+                    while (idx == curUser.getID())
+                      idx = r.nextInt(Messages.nClients)
+                    handler.++=("@").++=(clientList(idx).getName())
                   }
+                  if (tweetLength <= handler.length)
+                    tweetLength = 140
+                  remChars = tweetLength - handler.length - 1
+                  if (remChars == 0 && tweetLength < 140)
+                    remChars += Messages.avgTweetLength
                 }
-                throw new Exception("Exception at infinite while")
+                var str1Len = r.nextInt(remChars)
+                var str1 : String = randomString(str1Len)
+                var str2 : String = ""
+                var splitIdx = remChars - str1Len
+                if (splitIdx > 0)
+                  str2 = randomString(splitIdx)
+                return str1 + " " + handler.toString + str2
             }
         }
     }
-
   }
 
   def randomString(length : Int) : String = {
@@ -231,15 +328,14 @@ class Interactor() extends Actor {
         throw new Exception("Exception at infinite while")
       }
     }*/
-    breakable {
-      while (true) {
-        val newString = r.alphanumeric.take(length).mkString
-        if (!Messages.keyWords.contains(newString)) {
-          sb.append(newString)
-          break
-        }
-      }
-      throw new Exception("Exception at generating string")
+    var targetLength = length
+    while (targetLength > 0) {
+      val newString = r.alphanumeric.take(1 + r.nextInt(targetLength)).mkString
+      if (!Messages.keyWords.contains(newString))
+        sb.append(newString)
+      if (sb.length < targetLength)
+        sb.append(" ")
+      targetLength -= sb.length
     }
     return sb.toString
   }
@@ -364,8 +460,24 @@ class Client(identifier : Int) extends Actor {
     case Top(n) =>
       serverActor ! Top(n)
 
+    case TopMentions(n) =>
+      serverActor ! TopMentions(n)
+
+    case TopNotifications(n) =>
+      serverActor ! TopNotifications(n)
+
     case MessageList(msgList) =>
       println("Received top messages for client: " + identifier)
+      msgList.foreach(println)
+      ClientApp.interActor ! ClientCompleted
+
+    case MentionList(msgList) =>
+      println("Received top mentions for client: " + identifier)
+      msgList.foreach(println)
+      ClientApp.interActor ! ClientCompleted
+
+    case NotificationList(msgList) =>
+      println("Received top notifications for client: " + identifier)
       msgList.foreach(println)
       ClientApp.interActor ! ClientCompleted
 
