@@ -14,7 +14,7 @@ object ClientApp extends App {
 
   // TODO Stop when complete
   //val ipAddr : String = args(0)
-  val ipAddr : String = "192.168.0.10:8248"
+  val ipAddr : String = "127.0.0.1:8248"
   val system = ActorSystem("TwitterClientActor", ConfigFactory.load("applicationClient.conf"))
   //val serverActor = system.actorOf(Props[Server])
   val sActor = system.actorFor("akka.tcp://TwitterActor@" + ipAddr + "/user/Server")
