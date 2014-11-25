@@ -14,7 +14,7 @@ object ClientApp extends App {
 
   // TODO Stop when complete
   //val ipAddr : String = args(0)
-  val ipAddr : String = "127.0.0.1:8248"
+  val ipAddr : String = "192.168.0.10:8248"
   val system = ActorSystem("TwitterClientActor", ConfigFactory.load("applicationClient.conf"))
   //val serverActor = system.actorOf(Props[Server])
   val serverActor = system.actorSelection("akka.tcp://TwitterActor@" + ipAddr + "/user/Server")
@@ -168,12 +168,12 @@ class Interactor() extends Actor {
           val pickIdx = rand.nextInt(messages.size)
           //println(pickIdx + " vs " + messages.size)
           val tweetString = messages.get(pickIdx)
-          //if (tweetString.size + tweet.size <= 140) {
+          if (tweetString.size <= 140 + tweet.size ) {
           if (rtIdx == 0)
             tweet = tweet + tweetString
           else
             tweet = tweetString + tweet
-          //}
+          }
         }
         curUser.getReference() ! Tweet(tweet)
       }
