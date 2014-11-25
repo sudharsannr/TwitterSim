@@ -352,26 +352,26 @@ class Interactor() extends Actor {
     return sb.toString
   }
 
-  def generateFollowers(usersCount : Int, mean : Int) {
-    var r = new Random()
-    var nFollowers : Int = 0
-    for (i <- 0 until usersCount - 1) {
-      nFollowers = r.nextInt(Messages.avgFollowers);
-      val user = clientList(i)
-      for (f <- 0 until nFollowers + 1) {
-        breakable {
-          while (true) {
-            val fIdx = r.nextInt(usersCount)
-            if (fIdx != i) {
-              user.addFollower(clientList(fIdx))
-              break
-            }
-          }
-          throw new Exception("Exception at infinite while")
-        }
-      }
-    }
-  }
+//  def generateFollowers(usersCount : Int, mean : Int) {
+//    var r = new Random()
+//    var nFollowers : Int = 0
+//    for (i <- 0 until usersCount - 1) {
+//      nFollowers = r.nextInt(Messages.avgFollowers);
+//      val user = clientList(i)
+//      for (f <- 0 until nFollowers + 1) {
+//        breakable {
+//          while (true) {
+//            val fIdx = r.nextInt(usersCount)
+//            if (fIdx != i) {
+//              user.addFollower(clientList(fIdx))
+//              break
+//            }
+//          }
+//          throw new Exception("Exception at infinite while")
+//        }
+//      }
+//    }
+//  }
 
   def readUserRateStats(usersCount : Int) {
     val filename = "userRate_stats.txt"
@@ -441,7 +441,10 @@ class Interactor() extends Actor {
       val user = clientList(i)
 
       for (j <- 0 until noOfFollowers) {
-        val id = r1.nextInt(usersCount)
+      	var id = r1.nextInt(usersCount)
+      	while (id == user.identifier) {
+      		id = r1.nextInt(usersCount)
+      	}
         user.addFollower(clientList(id))
         val following = clientList(id)
         following.addFollowing(user)
