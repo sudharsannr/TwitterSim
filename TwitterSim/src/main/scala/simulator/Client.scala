@@ -22,6 +22,7 @@ object ClientApp extends App {
   		
   val interActor = system.actorOf(Props(new Interactor()))
   var nRequests : Int = 0
+  val startTime = java.lang.System.currentTimeMillis()
   interActor ! Init
 
 }
@@ -33,6 +34,8 @@ class Interactor() extends Actor {
   var cancelMap : Map[User, Cancellable] = Map()
   var nCompleted : Int = 0
   var queueCount : Int = 0
+  val actorSys = ClientApp.system
+  import actorSys.dispatcher
   for (i <- 0 to Messages.nClients - 1)
     clientList(i) = new User(i, context.actorOf(Props(new Client(i : Int))))
   //generateFollowers(Messages.nClients, Messages.mean)
@@ -55,11 +58,9 @@ class Interactor() extends Actor {
 
     case RouteClients =>
       val rand = new Random();
-      val actorSys = ClientApp.system
-      import actorSys.dispatcher
       for (curUser <- clientList) {
-        val intervalRate = curUser.getMsgRate.milliseconds
-        val cancellable = actorSys.scheduler.schedule(0.milliseconds, intervalRate)(sendMsg(curUser))
+        val intervalRate = curUser.getMsgRate.seconds
+        val cancellable = actorSys.scheduler.schedule(0.seconds, intervalRate)(sendMsg(curUser))
         cancelMap += (curUser -> cancellable)
       }
     /*for (i <- 0 to Messages.msgLimit - 1) {
@@ -110,9 +111,20 @@ class Interactor() extends Actor {
       reTweet()
     }
     if (nMessages < Messages.msgLimit) {
-      var rndTweet = randomTweet(curUser)
-      //println(curUser + " ---> " + rndTweet)
-      curUser.getReference() ! Tweet(rndTweet)
+      val curSec = java.lang.System.currentTimeMillis()
+      val curTime = ((curSec - ClientApp.startTime).toDouble )/1000
+      if (curTime >= Messages.peakStart && curTime < Messages.peakEnd) {
+        for (i <- 0 to Messages.peakScale) {
+          var rndTweet = randomTweet(curUser)
+          curUser.getReference() ! Tweet(rndTweet)
+        }
+        nMessages += Messages.peakScale - 1 
+      }
+      else {
+        var rndTweet = randomTweet(curUser)
+        //println(curUser + " ---> " + rndTweet)
+        curUser.getReference() ! Tweet(rndTweet)
+      }
     }
   }
 
