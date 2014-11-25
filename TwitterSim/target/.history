@@ -152,7 +152,19 @@ run
 clean
 run
 >>>>>>> refs/remotes/origin/master
+<<<<<<< Upstream, based on origin/master
 run
 eclipse
 compile
 eclipse
+=======
+compile
+eclipse
+exit
+run
+compile
+run
+compile
+run
+exit
+>>>>>>> 190174a History commit
