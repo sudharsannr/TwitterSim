@@ -26,7 +26,8 @@ class User(identifier : Int, actor : ActorRef) extends Serializable {
   override def hashCode = identifier.hashCode
 
   override def toString() : String = {
-    return identifier.toString + " " + userName + " " + msgRate.toString
+    return identifier.toString + " " + userName + " " + msgRate.toString + " " +followers.size
+    
   }
 
   def getRecentMessages(n : Int) : List[String] = {

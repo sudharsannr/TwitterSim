@@ -43,8 +43,8 @@ class Interactor() extends Actor {
   //generateFollowers(, Messages.mean)
   readFollowersStats(clientList.length)
   readUserRateStats(clientList.length)
-  //  for (user <- clientList)
-  //    println(user)
+    for (user <- clientList)
+      println(user)
   //  for(user <- clientList)
   //  {
   //	  printf(user.getName() + ":")
@@ -422,22 +422,26 @@ class Interactor() extends Actor {
 
     for (i <- 0 until temp) {
 
-      if (minFollowers == 0)
-        noOfFollowers = r.nextInt(maxFollowers)
-      else
-        noOfFollowers = r.nextInt(minFollowers) + maxFollowers
-
-      var j : Int = 0
-      val user = clientList(i)
-
-      for (j <- 0 until noOfFollowers) {
-        var id = r1.nextInt(usersCount)
-        while (id == user.getID()) {
-          id = r1.nextInt(usersCount)
-        }
-        user.addFollower(clientList(id))
-      }
-    }
+    	if (minFollowers < usersCount) {
+    	
+    		if (minFollowers == 0)
+	        noOfFollowers = r.nextInt(maxFollowers)
+	      else
+	        noOfFollowers = r.nextInt(maxFollowers - minFollowers + 1) + minFollowers
+	
+	      var j : Int = 0
+	      val user = clientList(i)
+	
+	      for (j <- 0 until noOfFollowers) {
+	        var id = r1.nextInt(usersCount)
+	        while (id == user.getID()) {
+	          id = r1.nextInt(usersCount)
+	        }
+	        if (!user.isFollowed(clientList(id)))
+		        user.addFollower(clientList(id))
+	      }
+	    }
+  	}
 
   }
 
