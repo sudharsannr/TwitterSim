@@ -168,3 +168,8 @@ compile
 run
 exit
 >>>>>>> 190174a History commit
+run
+eclipse
+run
+clean
+run
