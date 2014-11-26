@@ -6,6 +6,7 @@ import simulator.Messages.{ RegisterClients, Tweet, Top, MessageList, Start, Top
 import scala.collection.mutable.ListBuffer
 import scala.util.control.Breaks._
 import scala.collection.mutable.HashSet
+import scala.concurrent.duration._
 
 object ServerApp extends App {
 
@@ -33,7 +34,9 @@ object ServerShare {
  * 6. hashtag
  */
 class Server extends Actor {
-
+	
+	var messagesReceived : Int = 0
+	
   def receive = {
 
     case Start =>
@@ -50,6 +53,10 @@ class Server extends Actor {
       }
 
     case Tweet(tweet) =>
+    	messagesReceived += 1
+    	import ServerApp.system.dispatcher
+    	ServerApp.system.scheduler.schedule(0.seconds,1.seconds)(printServerHandledMessages())
+    
       //println("Received " + tweet)
       var user = ServerShare.userMap(sender)
       val rtPattern = "via @\\w+$".r
@@ -167,15 +174,15 @@ class Server extends Actor {
       }
 
     case Top(n) =>
-      var user = ServerShare.userMap(sender)
+    	var user = ServerShare.userMap(sender)
       sender ! MessageList(user.getRecentMessages(n))
 
     case TopMentions(n) =>
-      var user = ServerShare.userMap(sender)
+    	var user = ServerShare.userMap(sender)
       sender ! MentionList(user.getRecentMentions(n))
 
     case TopNotifications(n) =>
-      var user = ServerShare.userMap(sender)
+    	var user = ServerShare.userMap(sender)
       sender ! NotificationList(user.getRecentNotifications(n))
 
   }
@@ -221,6 +228,11 @@ class Server extends Actor {
     
     return mutualFollowers
 
+  }
+  
+  def printServerHandledMessages () {
+  	println("Messages received from clients: "+messagesReceived+" per sec")
+  	messagesReceived = 0
   }
   
 }
