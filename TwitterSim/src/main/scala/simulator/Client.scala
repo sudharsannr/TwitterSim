@@ -99,7 +99,8 @@ class Interactor() extends Actor {
   def sendMsg(curUser : User) = {
     println(nMessages)
     nMessages += 1
-    if (nMessages == Messages.msgLimit) {
+    
+    if (nMessages >= Messages.msgLimit) {
       println("Limit reached!")
       limitReached = true
       for (cancellable <- cancelMap.values)
@@ -108,7 +109,7 @@ class Interactor() extends Actor {
       reTweet()
 
     }
-    if (nMessages < Messages.msgLimit) {
+    else if (nMessages < Messages.msgLimit) {
       val curSec = java.lang.System.currentTimeMillis()
       val curTime = ((curSec - ClientApp.startTime).toDouble) / 1000
       if (curTime >= Messages.peakStart && curTime < Messages.peakEnd) {
