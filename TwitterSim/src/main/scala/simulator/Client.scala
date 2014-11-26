@@ -164,11 +164,11 @@ class Interactor() extends Actor {
           tweet = " " + rtKeys(rtIdx) + twUser.getName()
 
         //FIXME Bug when checking if retweet + tweet <= 140 and infinite loop
-        val messages = twUser.getMessages()
+        val messages = twUser.getMessages().toArray
         if (messages.size > 0) {
           val pickIdx = rand.nextInt(messages.size)
           //println(pickIdx + " vs " + messages.size)
-          val tweetString = messages.get(pickIdx)
+          val tweetString = messages(pickIdx).toString()
           if (tweetString.size <= 140 + tweet.size ) {
           if (rtIdx == 0)
             tweet = tweet + tweetString
