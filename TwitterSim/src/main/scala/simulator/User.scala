@@ -6,6 +6,8 @@ import scala.collection.mutable.ListBuffer
 import scala.util.control.Breaks._
 import scala.collection.mutable.Queue
 import scala.collection.mutable.Map
+import java.util.LinkedList
+import java.util.concurrent.LinkedBlockingQueue
 
 class User(id : Int, actorRef : ActorRef) extends Serializable {
   val identifier : Int = id
@@ -15,9 +17,9 @@ class User(id : Int, actorRef : ActorRef) extends Serializable {
   var followers : ListBuffer[User] = ListBuffer.empty[User]
   var following : ListBuffer[User] = ListBuffer.empty[User]
   val maxSize = Messages.maxBufferSize
-  var messageQueue : Queue[String] = Queue.empty[String]
-  var mentions : Queue[String] = Queue.empty[String]
-  var notifications : Queue[String] = Queue.empty[String]
+  var mentions = new LinkedBlockingQueue[String](maxSize)
+  var messageQueue = new LinkedBlockingQueue[String](maxSize)
+  var notifications = new LinkedBlockingQueue[String](maxSize)
 
   override def equals(o : Any) = o match {
     case that : User => that.userName.equals(this.userName)
@@ -36,9 +38,9 @@ class User(id : Int, actorRef : ActorRef) extends Serializable {
     var msgList : ListBuffer[String] = ListBuffer.empty[String]
     var i = 0
     if (!messageQueue.isEmpty) {
-      var tempQueue = messageQueue.toList
+      var tempQueue = messageQueue.toArray
       while (i < n && i < tempQueue.size) {
-        var msg = tempQueue(i)
+        var msg = tempQueue(i).toString()
         //TODO Message queue has null
         if (null != msg) {
           msgList += msg
@@ -53,7 +55,7 @@ class User(id : Int, actorRef : ActorRef) extends Serializable {
     var msgList : ListBuffer[String] = ListBuffer.empty[String]
     var i = 0
     while (i < n && !mentions.isEmpty) {
-      var msg = mentions.dequeue()
+      var msg = mentions.remove()
       //TODO Message queue has null
       if (null != msg) {
         msgList += msg
@@ -67,7 +69,7 @@ class User(id : Int, actorRef : ActorRef) extends Serializable {
     var msgList : ListBuffer[String] = ListBuffer.empty[String]
     var i = 0
     while (i < n && !notifications.isEmpty) {
-      var msg = notifications.dequeue()
+      var msg = notifications.remove()
       //TODO Message queue has null
       if (null != msg) {
         msgList += msg
@@ -105,10 +107,6 @@ class User(id : Int, actorRef : ActorRef) extends Serializable {
     return following
   }
 
-  def getMessages() : Queue[String] = {
-    return messageQueue
-  }
-
   def getMsgRate() : Int = {
     return msgRate
   }
@@ -122,7 +120,7 @@ class User(id : Int, actorRef : ActorRef) extends Serializable {
   }
 
   def addMessage(message : String) {
-    messageQueue.enqueue(message)
+    messageQueue.offer(message)
   }
 
   def setMessageRate(newMsgRate : Int) {
@@ -134,11 +132,21 @@ class User(id : Int, actorRef : ActorRef) extends Serializable {
   }
 
   def addMention(message : String) {
-    mentions.enqueue(message)
+    if(mentions.size() >= maxSize)
+      mentions.poll()
+    mentions.offer(message)
   }
 
   def addNotification(message : String) {
-    notifications.enqueue(message)
+    if(notifications.size() >= maxSize)
+      notifications.poll()
+    notifications.offer(message)
+  }
+  
+  def getMessages() : LinkedBlockingQueue[String] = {
+    if(messageQueue.size() >= maxSize)
+      messageQueue.poll()
+    return messageQueue
   }
 
 }
