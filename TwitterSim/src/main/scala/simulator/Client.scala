@@ -9,6 +9,7 @@ import scala.collection.mutable.{ ListBuffer, ArrayBuffer }
 import scala.io.Source
 import scala.concurrent.duration._
 import akka.routing.{ FromConfig, RoundRobinRouter, Broadcast }
+import scala.actors.threadpool.AtomicInteger
 
 object ClientApp extends App {
 
@@ -30,10 +31,10 @@ object ClientApp extends App {
 class Interactor() extends Actor {
   var serverActor = ClientApp.serverActor
   var clientList = new Array[User](Messages.nClients)
-  var nMessages : Int = 0
+  var nMessages = new AtomicInteger()
   var cancelMap : Map[User, Cancellable] = Map()
   var nCompleted : Int = 0
-  var queueCount : Int = 0
+  var queueCount = new AtomicInteger()
   val actorSys = ClientApp.system
   var limitReached : Boolean = false
   import actorSys.dispatcher
@@ -68,12 +69,8 @@ class Interactor() extends Actor {
 
     case PrintMessages =>
       println("Printing messages")
-      var i:Int = 0
-      for (i <- 0 to clientList.length - 1) {
-      	println(i)
-      	clientList(i).getReference() ! Top(Messages.maxBufferSize)
-      }
-        
+      for (user <- clientList)
+      	user.getReference() ! Top(Messages.maxBufferSize)
 
     case PrintNotifications =>
       println("Printing notificatins")
@@ -89,8 +86,8 @@ class Interactor() extends Actor {
       nCompleted += 1
       if (nCompleted == clientList.length) {
         nCompleted = 0
-        queueCount += 1
-        queueCount match {
+        queueCount.incrementAndGet()
+        queueCount.get() match {
           case 1 => self ! PrintNotifications
           case 2 => self ! PrintMentions
           case 3 =>
@@ -101,19 +98,18 @@ class Interactor() extends Actor {
   }
 
   def sendMsg(curUser : User) = {
-    println(nMessages)
-    nMessages += 1
+    nMessages.incrementAndGet()
     
-    if (nMessages >= Messages.msgLimit) {
+    if (nMessages.get() == Messages.msgLimit) {
       println("Limit reached!")
       limitReached = true
       for (cancellable <- cancelMap.values)
         cancellable.cancel()
       directMessage()
       reTweet()
-
     }
-    else if (nMessages < Messages.msgLimit) {
+    else if (nMessages.get() < Messages.msgLimit) {
+      println(nMessages)
       val curSec = java.lang.System.currentTimeMillis()
       val curTime = ((curSec - ClientApp.startTime).toDouble) / 1000
       if (curTime >= Messages.peakStart && curTime < Messages.peakEnd) {
@@ -121,7 +117,7 @@ class Interactor() extends Actor {
           var rndTweet = randomTweet(curUser)
           curUser.getReference() ! Tweet(rndTweet)
         }
-        nMessages += Messages.peakScale - 1
+        nMessages.addAndGet(Messages.peakScale - 1)
       }
       else {
         var rndTweet = randomTweet(curUser)
@@ -141,7 +137,6 @@ class Interactor() extends Actor {
         val count = rand.nextInt(followers.size)
         for (i <- 0 until count) {
           val toAddr = "dm @" + followers(rand.nextInt(followers.size)).getName()
-          println(i)
           user.getReference() ! Tweet(toAddr + " " + randomString(140 - toAddr.length() - 1))
         }
       }
@@ -157,7 +152,6 @@ class Interactor() extends Actor {
     for (i <- 0 to nClients) {
       val curUser = clientList(rand.nextInt(nClients))
       val twUser = clientList(rand.nextInt(nClients))
-      println(i)
       if (!curUser.equals(twUser)) {
         var rtIdx = rand.nextInt(rtKeys.size)
         var tweet = ""
