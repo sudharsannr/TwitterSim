@@ -6,8 +6,8 @@ import scala.collection.mutable.ListBuffer
 object Messages {
 
   val requestString : String = "REQUEST"
-  val nServers : Int = 10
-  val nClients : Int = 1000
+  val nServers : Int = 20
+  val nClients : Int = 5000
   val maxNeighbors : Int = nClients - 1
   val msgLimit : Int = 10000
   val mean : Int = 200
