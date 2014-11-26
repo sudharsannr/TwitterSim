@@ -432,7 +432,7 @@ class Interactor() extends Actor {
 
       for (j <- 0 until noOfFollowers) {
         var id = r1.nextInt(usersCount)
-        while (id == user.identifier) {
+        while (id == user.getID()) {
           id = r1.nextInt(usersCount)
         }
         user.addFollower(clientList(id))

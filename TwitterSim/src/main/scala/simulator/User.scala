@@ -1,19 +1,17 @@
 package simulator
 
 import akka.actor._
-import scala.collection.immutable.List
+import scala.collection.mutable.MutableList
 import scala.collection.mutable.Queue
 import scala.util.Random
 import java.util.LinkedList
 import java.util.Arrays
 import java.util.concurrent.LinkedBlockingQueue
 
-class User(id : Int, actorRef : ActorRef) extends Serializable {
-  val identifier : Int = id
+class User(identifier : Int, actor : ActorRef) extends Serializable {
   var userName : String = Random.alphanumeric.take(4 + Random.nextInt(12)).mkString
-  val actor : ActorRef = actorRef
   var msgRate : Int = 0
-  var followers : List[User] = List.empty[User]
+  var followers : MutableList[User] = new MutableList[User]()
   var mentions = new LinkedBlockingQueue[String](Messages.maxBufferSize)
   var messageQueue = new LinkedBlockingQueue[String](Messages.maxBufferSize)
   var notifications = new LinkedBlockingQueue[String](Messages.maxBufferSize)
@@ -80,7 +78,7 @@ class User(id : Int, actorRef : ActorRef) extends Serializable {
   }
 
   def getID() : Int = {
-    return id
+    return identifier
   }
 
   def getName() : String = {
@@ -99,7 +97,7 @@ class User(id : Int, actorRef : ActorRef) extends Serializable {
     getFollowers().contains(user)
   }
 
-  def getFollowers() : List[User] = {
+  def getFollowers() : MutableList[User] = {
     return followers
   }
 
@@ -108,7 +106,7 @@ class User(id : Int, actorRef : ActorRef) extends Serializable {
   }
 
   def addFollower(follower : User) {
-    followers.+:(follower)
+    followers += follower
   }
 
   def addMessage(message : String) {
