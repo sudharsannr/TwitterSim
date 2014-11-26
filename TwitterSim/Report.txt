@@ -34,5 +34,14 @@ span of time. The server was still able to handle the burstiness.
 
 Observations:
 -------------
-Number of clients: 100
-Number of server actors: 10
+Number of clients: 5000
+Message limit: 10000
+Number of server actors: 20
+Total time taken: 31s
+Average number of messages handled by the server: 11562
+
+Number of clients: 10000
+Message limit: 10000
+Number of server actors: 20
+Total time taken: 510s
+Average number of messages handled by the server: 4137
