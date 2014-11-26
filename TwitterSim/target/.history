@@ -343,3 +343,6 @@ run
 clean
 run
 >>>>>>> refs/remotes/origin/master
+clean
+compile
+eclipse
