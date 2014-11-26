@@ -20,6 +20,13 @@ object ServerApp extends App {
 object ServerShare {
   var userMap : Map[ActorRef, User] = Map();
   var usersList : ListBuffer[User] = ListBuffer.empty[User]
+  var messagesReceived : Int = 0
+  var nReceived : Int = 0
+  import ServerApp.system.dispatcher
+  ServerApp.system.scheduler.schedule(0.seconds, 1.seconds)(printServerHandledMessages())
+  def printServerHandledMessages() {
+    println("Messages received from clients: " + ServerShare.messagesReceived + " per sec")
+  }
 }
 
 /**
@@ -31,32 +38,23 @@ object ServerShare {
  *    .@  : same as above
  * 4. direct message: send message to followers using dm @username message string => done
  * 5. retweet: RT @srcusername same message or same message via @srcusername => done
- * 6. hashtag
  */
 class Server extends Actor {
-	
-	var messagesReceived : Int = 0
-	
+
   def receive = {
 
     case Start =>
       println("Server started!")
 
-    case RegisterClients(userList) =>
+    case RegisterClients(curUser) =>
       println("Registering clients")
-      for (curUser <- userList) {
-        var userActor = curUser.getReference()
-        ServerShare.userMap += (userActor -> curUser)
-        ServerShare.usersList += curUser
-        userActor ! "ACK"
-       
-      }
+      var userActor = curUser.getReference()
+      ServerShare.userMap += (userActor -> curUser)
+      ServerShare.usersList += curUser
+      userActor ! "ACK"
 
     case Tweet(tweet) =>
-    	messagesReceived += 1
-    	import ServerApp.system.dispatcher
-    	ServerApp.system.scheduler.schedule(0.seconds,1.seconds)(printServerHandledMessages())
-    
+      ServerShare.messagesReceived += 1
       //println("Received " + tweet)
       var user = ServerShare.userMap(sender)
       val rtPattern = "via @\\w+$".r
@@ -75,136 +73,136 @@ class Server extends Actor {
           follower.addMessage(tweet)
       }
       else {
-      
-      	var index = tweet.indexOf('@')
-      	var followersSet : HashSet[User] = HashSet()
-      	var username = findMentionedUsername(tweet, index+1)
-      	if (index == 0) {
-      		var mentionedUser = new User(0, null)
+
+        var index = tweet.indexOf('@')
+        var followersSet : HashSet[User] = HashSet()
+        var username = findMentionedUsername(tweet, index + 1)
+        if (index == 0) {
+          var mentionedUser = new User(0, null)
           mentionedUser.setUserName(username)
           var mentionedUserObj = ServerShare.usersList(ServerShare.usersList.indexOf(mentionedUser))
-          
+
           //mentioned person's mentions tab
           mentionedUserObj.addMention(tweet)
-          
+
           //If mentioned person follows the tweeter, add it to mentioned person's timeline
           if (mentionedUserObj.isFollowed(user)) {
-          	//Mentioned users timeline
-          	mentionedUserObj.addMessage(tweet)
-          	
-          	//senders timeline
-	          user.addMessage(tweet)
-	          
-          	//find mutual followers
-          	var mutualFollowers = findMutualFollowers(mentionedUserObj, user)
-	          for (mFollowers <- mutualFollowers) {
-	          	//mutual followers timeline
-	          	followersSet += mFollowers
-	            //mFollowers.addMessage(tweet)
-	          }
+            //Mentioned users timeline
+            mentionedUserObj.addMessage(tweet)
+
+            //senders timeline
+            user.addMessage(tweet)
+
+            //find mutual followers
+            var mutualFollowers = findMutualFollowers(mentionedUserObj, user)
+            for (mFollowers <- mutualFollowers) {
+              //mutual followers timeline
+              followersSet += mFollowers
+              //mFollowers.addMessage(tweet)
+            }
           }
-      		
-      		index = index + 1 + username.length()
-      		var newIndex = tweet.indexOf('@', index)
-      		
-      		while (newIndex != -1) {
-      			username = findMentionedUsername(tweet, newIndex+1)
-          	index = newIndex + username.length() + 1
-          	
-          	var mentionedExtraUsers = new User(0, null)
-	          mentionedExtraUsers.setUserName(username)
-	          
-	          var mentionedExtraUsersObj = ServerShare.usersList(ServerShare.usersList.indexOf(mentionedExtraUsers))
-          	
-	         	mentionedExtraUsersObj.addMention(tweet)
-	          if (mentionedExtraUsersObj.isFollowed(user)) {
-	          	mentionedExtraUsersObj.addMessage(tweet)
-	          	
-	          	var mutualFollowers1 = findMutualFollowers(mentionedExtraUsersObj, user)
-		          for (m1Followers <- mutualFollowers1) {
-		          	//mutual followers timeline
-		          	followersSet += m1Followers
-		            //mFollowers.addMessage(tweet)
-		          }
-	          	
-	          }
-	          
-          	newIndex = tweet.indexOf('@', index)
-      		}
-      		
-      		for (m2Followers <- followersSet) {
-      			m2Followers.addMessage(tweet)
-      		}
-      		
-      	}
-      	else if (index > 0) {
-      		
-      		//senders timeline
+
+          index = index + 1 + username.length()
+          var newIndex = tweet.indexOf('@', index)
+
+          while (newIndex != -1) {
+            username = findMentionedUsername(tweet, newIndex + 1)
+            index = newIndex + username.length() + 1
+
+            var mentionedExtraUsers = new User(0, null)
+            mentionedExtraUsers.setUserName(username)
+
+            var mentionedExtraUsersObj = ServerShare.usersList(ServerShare.usersList.indexOf(mentionedExtraUsers))
+
+            mentionedExtraUsersObj.addMention(tweet)
+            if (mentionedExtraUsersObj.isFollowed(user)) {
+              mentionedExtraUsersObj.addMessage(tweet)
+
+              var mutualFollowers1 = findMutualFollowers(mentionedExtraUsersObj, user)
+              for (m1Followers <- mutualFollowers1) {
+                //mutual followers timeline
+                followersSet += m1Followers
+                //mFollowers.addMessage(tweet)
+              }
+
+            }
+
+            newIndex = tweet.indexOf('@', index)
+          }
+
+          for (m2Followers <- followersSet) {
+            m2Followers.addMessage(tweet)
+          }
+
+        }
+        else if (index > 0) {
+
+          //senders timeline
           user.addMessage(tweet)
-          
+
           //Sender's followers timelines
           var followers = user.getFollowers()
           for (eachFollower <- followers) {
-          	eachFollower.addMessage(tweet)
+            eachFollower.addMessage(tweet)
           }
-          
+
           index = index + 1 + username.length()
           var newIndex = tweet.indexOf('@', index)
           while (newIndex != -1) {
-          	
-          	username = findMentionedUsername(tweet, newIndex+1)
-          	index = newIndex + username.length() + 1
-          	
-          	var mentionedExtraUsers = new User(0, null)
-	          mentionedExtraUsers.setUserName(username)
-	          var mentionedExtraUsersObj = ServerShare.usersList(ServerShare.usersList.indexOf(mentionedExtraUsers))
-          	
-	          if (!user.isFollowed(mentionedExtraUsersObj)) {
-	          	mentionedExtraUsersObj.addMention(tweet)
-	          }
-	          
-          	newIndex = tweet.indexOf('@', index)
+
+            username = findMentionedUsername(tweet, newIndex + 1)
+            index = newIndex + username.length() + 1
+
+            var mentionedExtraUsers = new User(0, null)
+            mentionedExtraUsers.setUserName(username)
+            var mentionedExtraUsersObj = ServerShare.usersList(ServerShare.usersList.indexOf(mentionedExtraUsers))
+
+            if (!user.isFollowed(mentionedExtraUsersObj)) {
+              mentionedExtraUsersObj.addMention(tweet)
+            }
+
+            newIndex = tweet.indexOf('@', index)
           }
-          
-      	}
-      	else {
-      		user.addMessage(tweet)
-      	}
-        	
+
+        }
+        else {
+          user.addMessage(tweet)
+        }
+
       }
 
     case Top(n) =>
-    	var user = ServerShare.userMap(sender)
+      var user = ServerShare.userMap(sender)
       sender ! MessageList(user.getRecentMessages(n))
 
     case TopMentions(n) =>
-    	var user = ServerShare.userMap(sender)
+      var user = ServerShare.userMap(sender)
       sender ! MentionList(user.getRecentMentions(n))
 
     case TopNotifications(n) =>
-    	var user = ServerShare.userMap(sender)
+      var user = ServerShare.userMap(sender)
       sender ! NotificationList(user.getRecentNotifications(n))
 
   }
-  
-  def findMentionedUsername (tweet : String, index : Int) : String = {
-  	var tweetArr = tweet.toCharArray()
-  	var i : Int = index
-  	var username : String = ""
-  	
-  	breakable {
-	  	for (i <- index until tweet.length) {
-	  		if (tweetArr.array(i) != ' ') {
-	  			username += tweetArr.array(i)
-	  		}
-	  		else {
-	  			break
-	  		}
-	  		
-	  	}
-  	}
-  		
-  	return username
+
+  def findMentionedUsername(tweet : String, index : Int) : String = {
+    var tweetArr = tweet.toCharArray()
+    var i : Int = index
+    var username : String = ""
+
+    breakable {
+      for (i <- index until tweet.length) {
+        if (tweetArr.array(i) != ' ') {
+          username += tweetArr.array(i)
+        }
+        else {
+          break
+        }
+
+      }
+    }
+
+    return username
   }
 
   def findMutualFollowers(mentionUserObj : User, tweeterObj : User) : ListBuffer[User] = {
@@ -213,26 +211,20 @@ class Server extends Actor {
     var tweetersFollowers = tweeterObj.getFollowers()
     var mutualFollowers : ListBuffer[User] = ListBuffer.empty[User]
     var mutualFollowerMap : Map[User, Int] = Map()
-    
+
     for (tFollowers <- tweetersFollowers) {
-    	if (!mutualFollowerMap.contains(tFollowers)) {
-    		mutualFollowerMap += (tFollowers -> 1)
-    	}
+      if (!mutualFollowerMap.contains(tFollowers)) {
+        mutualFollowerMap += (tFollowers -> 1)
+      }
     }
-    
+
     for (mFollowers <- mentionedFollowers) {
-    	if (!mutualFollowerMap.contains(mFollowers)) {
-    		mutualFollowerMap += (mFollowers -> 1)
-    	}	
+      if (!mutualFollowerMap.contains(mFollowers)) {
+        mutualFollowerMap += (mFollowers -> 1)
+      }
     }
-    
+
     return mutualFollowers
 
   }
-  
-  def printServerHandledMessages () {
-  	println("Messages received from clients: "+messagesReceived+" per sec")
-  	messagesReceived = 0
-  }
-  
 }

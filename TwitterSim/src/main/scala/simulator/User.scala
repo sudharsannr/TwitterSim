@@ -1,12 +1,11 @@
 package simulator
 
-import scala.util.Random
 import akka.actor._
-import scala.collection.mutable.ListBuffer
-import scala.util.control.Breaks._
+import scala.collection.immutable.List
 import scala.collection.mutable.Queue
-import scala.collection.mutable.Map
+import scala.util.Random
 import java.util.LinkedList
+import java.util.Arrays
 import java.util.concurrent.LinkedBlockingQueue
 
 class User(id : Int, actorRef : ActorRef) extends Serializable {
@@ -14,12 +13,10 @@ class User(id : Int, actorRef : ActorRef) extends Serializable {
   var userName : String = Random.alphanumeric.take(4 + Random.nextInt(12)).mkString
   val actor : ActorRef = actorRef
   var msgRate : Int = 0
-  var followers : ListBuffer[User] = ListBuffer.empty[User]
-  var following : ListBuffer[User] = ListBuffer.empty[User]
-  val maxSize = Messages.maxBufferSize
-  var mentions = new LinkedBlockingQueue[String](maxSize)
-  var messageQueue = new LinkedBlockingQueue[String](maxSize)
-  var notifications = new LinkedBlockingQueue[String](maxSize)
+  var followers : List[User] = List.empty[User]
+  var mentions = new LinkedBlockingQueue[String](Messages.maxBufferSize)
+  var messageQueue = new LinkedBlockingQueue[String](Messages.maxBufferSize)
+  var notifications = new LinkedBlockingQueue[String](Messages.maxBufferSize)
 
   override def equals(o : Any) = o match {
     case that : User => that.userName.equals(this.userName)
@@ -34,9 +31,10 @@ class User(id : Int, actorRef : ActorRef) extends Serializable {
     return identifier.toString + " " + userName + " " + msgRate.toString
   }
 
-  def getRecentMessages(n : Int) : ListBuffer[String] = {
-    var msgList : ListBuffer[String] = ListBuffer.empty[String]
-    var i = 0
+  def getRecentMessages(n : Int) : List[String] = {
+    var msgList : List[String] = List.empty[String]
+    msgList = messageQueue.toArray().toList.asInstanceOf[List[String]]
+    /*var i = 0
     if (!messageQueue.isEmpty) {
       var tempQueue = messageQueue.toArray
       while (i < n && i < tempQueue.size) {
@@ -47,13 +45,14 @@ class User(id : Int, actorRef : ActorRef) extends Serializable {
           i += 1
         }
       }
-    }
+    }*/
     return msgList
   }
 
-  def getRecentMentions(n : Int) : ListBuffer[String] = {
-    var msgList : ListBuffer[String] = ListBuffer.empty[String]
-    var i = 0
+  def getRecentMentions(n : Int) : List[String] = {
+    var msgList : List[String] = List.empty[String]
+    msgList = mentions.toArray().toList.asInstanceOf[List[String]]
+    /*var i = 0
     while (i < n && !mentions.isEmpty) {
       var msg = mentions.remove()
       //TODO Message queue has null
@@ -61,13 +60,14 @@ class User(id : Int, actorRef : ActorRef) extends Serializable {
         msgList += msg
         i += 1
       }
-    }
+    }*/
     return msgList
   }
 
-  def getRecentNotifications(n : Int) : ListBuffer[String] = {
-    var msgList : ListBuffer[String] = ListBuffer.empty[String]
-    var i = 0
+  def getRecentNotifications(n : Int) : List[String] = {
+    var msgList : List[String] = List.empty[String]
+    msgList = notifications.toArray().toList.asInstanceOf[List[String]]
+    /*var i = 0
     while (i < n && !notifications.isEmpty) {
       var msg = notifications.remove()
       //TODO Message queue has null
@@ -75,7 +75,7 @@ class User(id : Int, actorRef : ActorRef) extends Serializable {
         msgList += msg
         i += 1
       }
-    }
+    }*/
     return msgList
   }
 
@@ -99,12 +99,8 @@ class User(id : Int, actorRef : ActorRef) extends Serializable {
     getFollowers().contains(user)
   }
 
-  def getFollowers() : ListBuffer[User] = {
+  def getFollowers() : List[User] = {
     return followers
-  }
-
-  def getFollowing() : ListBuffer[User] = {
-    return following
   }
 
   def getMsgRate() : Int = {
@@ -112,11 +108,7 @@ class User(id : Int, actorRef : ActorRef) extends Serializable {
   }
 
   def addFollower(follower : User) {
-    followers += follower
-  }
-
-  def addFollowing(followingUsers : User) {
-    following += followingUsers
+    followers.+:(follower)
   }
 
   def addMessage(message : String) {
@@ -132,19 +124,19 @@ class User(id : Int, actorRef : ActorRef) extends Serializable {
   }
 
   def addMention(message : String) {
-    if(mentions.size() >= maxSize)
+    if (mentions.size() >= Messages.maxBufferSize)
       mentions.poll()
     mentions.offer(message)
   }
 
   def addNotification(message : String) {
-    if(notifications.size() >= maxSize)
+    if (notifications.size() >= Messages.maxBufferSize)
       notifications.poll()
     notifications.offer(message)
   }
-  
+
   def getMessages() : LinkedBlockingQueue[String] = {
-    if(messageQueue.size() >= maxSize)
+    if (messageQueue.size() >= Messages.maxBufferSize)
       messageQueue.poll()
     return messageQueue
   }
