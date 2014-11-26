@@ -24,12 +24,16 @@ object ServerShare {
   var nReceived : Int = 0
   var averageRec : Int = 0
   var timeElapsed : Int = 0
+  var totalMessagesRec : Int = 0
+
   import ServerApp.system.dispatcher
   ServerApp.system.scheduler.schedule(0.seconds, 1.seconds)(printServerHandledMessages())
+
   def printServerHandledMessages() {
     println("Messages received from clients: " + ServerShare.messagesReceived + " per sec")
     ServerShare.timeElapsed += 1
-    ServerShare.averageRec = (ServerShare.averageRec + ServerShare.messagesReceived)/ServerShare.timeElapsed
+    ServerShare.totalMessagesRec += ServerShare.messagesReceived
+    ServerShare.averageRec = ServerShare.totalMessagesRec/ServerShare.timeElapsed
     ServerShare.messagesReceived = 0
     println("Average msg per sec: "+ServerShare.averageRec)
     println("Time Elapsed: "+ServerShare.timeElapsed)
