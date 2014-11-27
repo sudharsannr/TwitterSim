@@ -2,7 +2,7 @@ package simulator
 
 import akka.actor.{ ActorSystem, Props, Actor, ActorRef }
 import com.typesafe.config.ConfigFactory
-import simulator.Messages.{ RegisterClients, Tweet, Top, MessageList, Start, TopMentions, TopNotifications, MentionList, NotificationList }
+import simulator.Messages.{ RegisterClients, Tweet, Top, MessageList, Start, TopMentions, TopNotifications, MentionList, NotificationList, Register }
 import scala.collection.mutable.ListBuffer
 import scala.util.control.Breaks._
 import scala.collection.mutable.HashSet
@@ -10,9 +10,8 @@ import scala.concurrent.duration._
 
 object ServerApp extends App {
 
-  val system = ActorSystem("TwitterActor")
+  implicit val system = ActorSystem("TwitterActor")
   val server = system.actorOf(Props[Server], name = "Server")
-  var nRequests : Int = 0
   server ! Start
 
 }
@@ -33,10 +32,10 @@ object ServerShare {
     println("Messages received from clients: " + ServerShare.messagesReceived + " per sec")
     ServerShare.timeElapsed += 1
     ServerShare.totalMessagesRec += ServerShare.messagesReceived
-    ServerShare.averageRec = ServerShare.totalMessagesRec/ServerShare.timeElapsed
+    ServerShare.averageRec = ServerShare.totalMessagesRec / ServerShare.timeElapsed
     ServerShare.messagesReceived = 0
-    println("Average msg per sec: "+ServerShare.averageRec)
-    println("Time Elapsed: "+ServerShare.timeElapsed)
+    println("Average msg per sec: " + ServerShare.averageRec)
+    println("Time Elapsed: " + ServerShare.timeElapsed)
   }
 }
 
@@ -57,12 +56,11 @@ class Server extends Actor {
     case Start =>
       println("Server started!")
 
-    case RegisterClients(curUser) =>
+    case Register(identifier, curUser) =>
       println("Registering clients")
-      var userActor = curUser.getReference()
-      ServerShare.userMap += (userActor -> curUser)
+      ServerShare.userMap += (sender -> curUser)
       ServerShare.usersList += curUser
-      userActor ! "ACK"
+      sender ! "ACK"
 
     case Tweet(tweet) =>
       ServerShare.messagesReceived += 1
@@ -73,7 +71,7 @@ class Server extends Actor {
       if (tweet.startsWith("dm ")) {
         val toHandler = ("@\\w+".r findFirstIn tweet).mkString
         if (toHandler.length() > 0) {
-          val toUser = new User(0, null)
+          val toUser = new User(0)
           toUser.setUserName(toHandler.substring(1))
           ServerShare.usersList(ServerShare.usersList.indexOf(toUser)).addNotification(tweet)
         }
@@ -81,7 +79,7 @@ class Server extends Actor {
       // Retweet with rt or via parameter
       else if (tweet.startsWith(Messages.rtKeys(0)) || ("" != (rtPattern findFirstIn tweet).mkString)) {
         for (follower <- user.getFollowers())
-          follower.addMessage(tweet)
+          ServerShare.usersList(follower).addMessage(tweet)
       }
       else {
 
@@ -89,7 +87,7 @@ class Server extends Actor {
         var followersSet : HashSet[User] = HashSet()
         var username = findMentionedUsername(tweet, index + 1)
         if (index == 0) {
-          var mentionedUser = new User(0, null)
+          var mentionedUser = new User(0)
           mentionedUser.setUserName(username)
           var mentionedUserObj = ServerShare.usersList(ServerShare.usersList.indexOf(mentionedUser))
 
@@ -97,7 +95,7 @@ class Server extends Actor {
           mentionedUserObj.addMention(tweet)
 
           //If mentioned person follows the tweeter, add it to mentioned person's timeline
-          if (mentionedUserObj.isFollowed(user)) {
+          if (mentionedUserObj.isFollowed(user.getID())) {
             //Mentioned users timeline
             mentionedUserObj.addMessage(tweet)
 
@@ -120,13 +118,13 @@ class Server extends Actor {
             username = findMentionedUsername(tweet, newIndex + 1)
             index = newIndex + username.length() + 1
 
-            var mentionedExtraUsers = new User(0, null)
+            var mentionedExtraUsers = new User(0)
             mentionedExtraUsers.setUserName(username)
 
             var mentionedExtraUsersObj = ServerShare.usersList(ServerShare.usersList.indexOf(mentionedExtraUsers))
 
             mentionedExtraUsersObj.addMention(tweet)
-            if (mentionedExtraUsersObj.isFollowed(user)) {
+            if (mentionedExtraUsersObj.isFollowed(user.getID())) {
               mentionedExtraUsersObj.addMessage(tweet)
 
               var mutualFollowers1 = findMutualFollowers(mentionedExtraUsersObj, user)
@@ -154,7 +152,8 @@ class Server extends Actor {
           //Sender's followers timelines
           var followers = user.getFollowers()
           for (eachFollower <- followers) {
-            eachFollower.addMessage(tweet)
+            val curFollower = getUser(eachFollower)
+            curFollower.addMessage(tweet)
           }
 
           index = index + 1 + username.length()
@@ -164,11 +163,11 @@ class Server extends Actor {
             username = findMentionedUsername(tweet, newIndex + 1)
             index = newIndex + username.length() + 1
 
-            var mentionedExtraUsers = new User(0, null)
+            var mentionedExtraUsers = new User(0)
             mentionedExtraUsers.setUserName(username)
             var mentionedExtraUsersObj = ServerShare.usersList(ServerShare.usersList.indexOf(mentionedExtraUsers))
 
-            if (!user.isFollowed(mentionedExtraUsersObj)) {
+            if (!user.isFollowed(mentionedExtraUsersObj.getID())) {
               mentionedExtraUsersObj.addMention(tweet)
             }
 
@@ -216,6 +215,13 @@ class Server extends Actor {
     return username
   }
 
+  def getUser(id : Int) : User = {
+    for (curUser <- ServerShare.usersList)
+      if (id == curUser.getID())
+        return curUser
+    return null
+  }
+
   def findMutualFollowers(mentionUserObj : User, tweeterObj : User) : ListBuffer[User] = {
 
     var mentionedFollowers = mentionUserObj.getFollowers()
@@ -224,18 +230,18 @@ class Server extends Actor {
     var mutualFollowerMap : Map[User, Int] = Map()
 
     for (tFollowers <- tweetersFollowers) {
-      if (!mutualFollowerMap.contains(tFollowers)) {
-        mutualFollowerMap += (tFollowers -> 1)
+      val curUser = getUser(tFollowers)
+      if (!mutualFollowerMap.contains(curUser)) {
+        mutualFollowerMap += (curUser -> 1)
       }
     }
 
     for (mFollowers <- mentionedFollowers) {
-      if (!mutualFollowerMap.contains(mFollowers)) {
-        mutualFollowerMap += (mFollowers -> 1)
+      val curUser = getUser(mFollowers)
+      if (!mutualFollowerMap.contains(curUser)) {
+        mutualFollowerMap += (curUser -> 1)
       }
     }
-
     return mutualFollowers
-
   }
 }

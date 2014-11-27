@@ -7,7 +7,7 @@ object Messages {
 
   val requestString : String = "REQUEST"
   val nServers : Int = 20
-  val nClients : Int = 1000
+  val nClients : Int = 10000
   val maxNeighbors : Int = nClients - 1
   val msgLimit : Int = 10000
   val mean : Int = 200
@@ -24,6 +24,8 @@ object Messages {
 
   sealed trait TwitterMessage
   case object Init extends TwitterMessage
+  case class RequestRegister(actor : ActorRef, curUser : User) extends TwitterMessage
+  case class Register(identifier : Int, user : User) extends TwitterMessage
   case object Request extends TwitterMessage
   case object PrintMessages extends TwitterMessage
   case object PrintNotifications extends TwitterMessage
@@ -39,7 +41,6 @@ object Messages {
   case class NotificationList(msgList : List[String]) extends TwitterMessage
   case class ScheduleClient(identifier : Int) extends TwitterMessage
   case object Start extends TwitterMessage
-  case object ShutDown extends TwitterMessage
   case object ClientCompleted extends TwitterMessage
 
 }

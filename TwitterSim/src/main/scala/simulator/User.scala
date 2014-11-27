@@ -8,10 +8,11 @@ import java.util.LinkedList
 import java.util.Arrays
 import java.util.concurrent.LinkedBlockingQueue
 
-class User(identifier : Int, actor : ActorRef) extends Serializable {
+class User(identifier : Int) extends Serializable{
   var userName : String = Random.alphanumeric.take(4 + Random.nextInt(12)).mkString
   var msgRate : Int = 0
-  var followers : MutableList[User] = new MutableList[User]()
+  @transient
+  var followers : MutableList[Int] = new MutableList[Int]()
   var mentions = new LinkedBlockingQueue[String](Messages.maxBufferSize)
   var messageQueue = new LinkedBlockingQueue[String](Messages.maxBufferSize)
   var notifications = new LinkedBlockingQueue[String](Messages.maxBufferSize)
@@ -86,19 +87,15 @@ class User(identifier : Int, actor : ActorRef) extends Serializable {
     return userName
   }
 
-  def getReference() : ActorRef = {
-    return actor
-  }
-
   def isFollowing(user : User) : Boolean = {
-    user.getFollowers().contains(this)
+    user.getFollowers().contains(this.identifier)
   }
 
-  def isFollowed(user : User) : Boolean = {
-    getFollowers().contains(user)
+  def isFollowed(user : Int) : Boolean = {
+    followers.contains(user)
   }
 
-  def getFollowers() : MutableList[User] = {
+  def getFollowers() : MutableList[Int] = {
     return followers
   }
 
@@ -106,7 +103,7 @@ class User(identifier : Int, actor : ActorRef) extends Serializable {
     return msgRate
   }
 
-  def addFollower(follower : User) {
+  def addFollower(follower : Int) {
     followers += follower
   }
 

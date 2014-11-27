@@ -2,7 +2,7 @@ package simulator
 
 import akka.actor.{ Actor, ActorSystem, Props, Scheduler, Cancellable, PoisonPill }
 import com.typesafe.config.ConfigFactory
-import simulator.Messages.{ Init, Tweet, Top, ScheduleClient, MessageList, PrintMessages, RegisterClients, ClientCompleted, ShutDown, PrintMentions, PrintNotifications, TopMentions, TopNotifications, MentionList, NotificationList }
+import simulator.Messages.{ Init, Tweet, Top, ScheduleClient, MessageList, PrintMessages, RegisterClients, ClientCompleted, PrintMentions, PrintNotifications, TopMentions, TopNotifications, MentionList, NotificationList, Register, RequestRegister }
 import scala.util.Random
 import scala.util.control.Breaks._
 import scala.collection.mutable.{ ListBuffer, ArrayBuffer }
@@ -10,41 +10,40 @@ import scala.io.Source
 import scala.concurrent.duration._
 import akka.routing.{ FromConfig, RoundRobinRouter, Broadcast }
 import scala.actors.threadpool.AtomicInteger
+import akka.actor.ActorRef
 
 object ClientApp extends App {
 
-  // TODO Stop when complete
-  //val ipAddr : String = args(0)
-  val ipAddr : String = "127.0.0.1:8248"
   val system = ActorSystem("TwitterClientActor", ConfigFactory.load("applicationClient.conf"))
-  //val serverActor = system.actorOf(Props[Server])
+  val ipAddr : String = "127.0.0.1:8248"
   val sActor = system.actorFor("akka.tcp://TwitterActor@" + ipAddr + "/user/Server")
   val serverVector = Vector.fill(Messages.nServers)(sActor)
   val serverActor = system.actorOf(Props.empty.withRouter(RoundRobinRouter(routees = serverVector)), "serverRouter")
-  val interActor = system.actorOf(Props(new Interactor()))
-  var nRequests : Int = 0
-  val startTime = java.lang.System.currentTimeMillis()
+  val interActor = system.actorOf(Props(new Interactor(sActor)))
   interActor ! Init
 
 }
 
-class Interactor() extends Actor {
-  var serverActor = ClientApp.serverActor
+class Interactor(sActor : ActorRef) extends Actor {
+
+  var nRequests : Int = 0
+  val startTime = java.lang.System.currentTimeMillis()
   var clientList = new Array[User](Messages.nClients)
   var nMessages = new AtomicInteger()
   var cancelMap : Map[User, Cancellable] = Map()
   var nCompleted : Int = 0
   var queueCount = new AtomicInteger()
-  val actorSys = ClientApp.system
   var limitReached : Boolean = false
-  import actorSys.dispatcher
-  for (i <- 0 to clientList.length - 1)
-    clientList(i) = new User(i, context.actorOf(Props(new Client(i : Int))))
+  var clients : Array[ActorRef] = new Array[ActorRef](Messages.nClients)
+  for (i <- 0 to clientList.length - 1) {
+    clients(i) = context.actorOf(Props(new Client(i : Int)))
+    clientList(i) = new User(i)
+  }
   //generateFollowers(, Messages.mean)
   readFollowersStats(clientList.length)
   readUserRateStats(clientList.length)
-    for (user <- clientList)
-      println(user)
+  /*for (user <- clientList)
+    println(user)*/
   //  for(user <- clientList)
   //  {
   //	  printf(user.getName() + ":")
@@ -56,31 +55,38 @@ class Interactor() extends Actor {
   def receive = {
 
     case Init =>
-      for (curUser <- clientList)
-        serverActor ! RegisterClients(curUser)
+      println("Init")
+      for (i <- 0 until clients.size) {
+        val client = clients(i)
+        client ! RequestRegister(self, clientList(i))
+      }
+    /*  for (curUser <- clientList) 
+        serverActor ! RegisterClients(curUser)*/
 
     case ScheduleClient(identifier) =>
       if (!limitReached) {
-        //println("Scheduling client " + identifier)
+        println("Scheduling client " + identifier)
         val curUser = clientList(identifier)
-        val cancellable = actorSys.scheduler.schedule(0.milliseconds, curUser.getMsgRate.milliseconds)(sendMsg(curUser))
+        val localUser = clients(identifier)
+        import ClientApp.system.dispatcher
+        val cancellable = ClientApp.system.scheduler.schedule(0.milliseconds, curUser.getMsgRate.milliseconds)(sendMsg(curUser, localUser))
         cancelMap += (curUser -> cancellable)
       }
 
     case PrintMessages =>
       println("Printing messages")
-      for (user <- clientList)
-      	user.getReference() ! Top(Messages.maxBufferSize)
+      for (user <- clients)
+        user ! Top(Messages.maxBufferSize)
 
     case PrintNotifications =>
       println("Printing notificatins")
-      for (user <- clientList)
-        user.getReference() ! TopNotifications(Messages.maxBufferSize)
+      for (user <- clients)
+        user ! TopNotifications(Messages.maxBufferSize)
 
     case PrintMentions =>
       println("Printing mentions")
-      for (user <- clientList)
-        user.getReference() ! TopMentions(Messages.maxBufferSize)
+      for (user <- clients)
+        user ! TopMentions(Messages.maxBufferSize)
 
     case ClientCompleted =>
       nCompleted += 1
@@ -91,15 +97,15 @@ class Interactor() extends Actor {
           case 1 => self ! PrintNotifications
           case 2 => self ! PrintMentions
           case 3 =>
-            serverActor ! Broadcast(PoisonPill)
+            ClientApp.serverActor ! Broadcast(PoisonPill)
             context.system.shutdown()
         }
       }
   }
 
-  def sendMsg(curUser : User) = {
+  def sendMsg(curUser : User, localUser : ActorRef) = {
     nMessages.incrementAndGet()
-    
+
     if (nMessages.get() == Messages.msgLimit) {
       println("Limit reached!")
       limitReached = true
@@ -111,18 +117,18 @@ class Interactor() extends Actor {
     else if (nMessages.get() < Messages.msgLimit) {
       println(nMessages)
       val curSec = java.lang.System.currentTimeMillis()
-      val curTime = ((curSec - ClientApp.startTime).toDouble) / 1000
+      val curTime = ((curSec - startTime).toDouble) / 1000
       if (curTime >= Messages.peakStart && curTime < Messages.peakEnd) {
         for (i <- 0 to Messages.peakScale) {
           var rndTweet = randomTweet(curUser)
-          curUser.getReference() ! Tweet(rndTweet)
+          localUser ! Tweet(rndTweet)
         }
         nMessages.addAndGet(Messages.peakScale - 1)
       }
       else {
         var rndTweet = randomTweet(curUser)
         //println(curUser + " ---> " + rndTweet)
-        curUser.getReference() ! Tweet(rndTweet)
+        localUser ! Tweet(rndTweet)
       }
     }
   }
@@ -136,8 +142,8 @@ class Interactor() extends Actor {
       if (followers.size != 0) {
         val count = rand.nextInt(followers.size)
         for (i <- 0 until count) {
-          val toAddr = "dm @" + followers(rand.nextInt(followers.size)).getName()
-          user.getReference() ! Tweet(toAddr + " " + randomString(140 - toAddr.length() - 1))
+          val toAddr = "dm @" + clientList(followers(rand.nextInt(followers.size))).getName()
+          clients(user.getID()) ! Tweet(toAddr + " " + randomString(140 - toAddr.length() - 1))
         }
       }
     }
@@ -173,7 +179,7 @@ class Interactor() extends Actor {
               tweet = tweetString + tweet
           }
         }
-        curUser.getReference() ! Tweet(tweet)
+        clients(curUser.getID()) ! Tweet(tweet)
       }
     }
     self ! PrintMessages
@@ -211,8 +217,8 @@ class Interactor() extends Actor {
                   var i : Int = 0
                   while (i < nMentions) {
                     var follower = followers(r.nextInt(nFollowers))
-                    if (!followerList.contains(follower)) {
-                      followerList.+=(follower)
+                    if (!followerList.contains(clientList(follower))) {
+                      followerList.+=(clientList(follower))
                       i += 1
                     }
                   }
@@ -231,7 +237,7 @@ class Interactor() extends Actor {
                   while (idx == curUser.getID())
                     idx = r.nextInt(clientList.length)
                   //handler.++=("@").++=(clientList(idx).getName()).++=(" ")
-                    handler += "@" + clientList(idx).getName() + " "
+                  handler += "@" + clientList(idx).getName() + " "
                 }
                 if (tweetLength <= handler.length)
                   tweetLength = 140
@@ -244,7 +250,7 @@ class Interactor() extends Actor {
                 var r = new Random()
                 var nFollowers = followers.length
                 //var handler = StringBuilder.newBuilder
-                var handler:String = ""
+                var handler : String = ""
                 var remChars = -1
                 if (nFollowers == 0) {
                   while (remChars < 1) {
@@ -253,7 +259,7 @@ class Interactor() extends Actor {
                       while (idx == curUser.getID())
                         idx = r.nextInt(clientList.length)
                       //handler.++=("@").++=(clientList(idx).getName()).++=(" ")
-                        handler += "@" + clientList(idx).getName() + " "
+                      handler += "@" + clientList(idx).getName() + " "
                     }
                     if (tweetLength <= handler.length)
                       tweetLength = 140
@@ -272,13 +278,13 @@ class Interactor() extends Actor {
                   var remChars = -1
                   while (remChars < 1) {
                     //var handler = StringBuilder.newBuilder
-                  	var handler:String = ""
+                    var handler : String = ""
                     var followerList = ArrayBuffer.empty[User]
                     var i : Int = 0
                     while (i < nMentions) {
                       var follower = followers(r.nextInt(nFollowers))
-                      if (!followerList.contains(follower)) {
-                        followerList.+=(follower)
+                      if (!followerList.contains(clientList(follower))) {
+                        followerList.+=(clientList(follower))
                         i += 1
                       }
                     }
@@ -298,7 +304,7 @@ class Interactor() extends Actor {
                   if (splitIdx > 0)
                     str2 = randomString(splitIdx)
                   //return str1 + " " + handler.toString + str2
-                    return str1 + " " + handler + str2
+                  return str1 + " " + handler + str2
                 }
               case TweetStrTo.toRandomUser =>
                 var remChars = -1
@@ -307,13 +313,13 @@ class Interactor() extends Actor {
                 var handler : String = ""
                 while (remChars < 1) {
                   //handler = StringBuilder.newBuilder
-                	handler = ""
+                  handler = ""
                   for (i <- 0 until nMentions) {
                     var idx = r.nextInt(clientList.length)
                     while (idx == curUser.getID())
                       idx = r.nextInt(clientList.length)
                     //handler.++=("@").++=(clientList(idx).getName())
-                      handler += "@" + clientList(idx).getName()
+                    handler += "@" + clientList(idx).getName()
                   }
                   if (tweetLength <= handler.length)
                     tweetLength = 140
@@ -328,7 +334,7 @@ class Interactor() extends Actor {
                 if (splitIdx > 0)
                   str2 = randomString(splitIdx)
                 //return str1 + " " + handler.toString + str2
-                  return str1 + " " + handler + str2
+                return str1 + " " + handler + str2
             }
         }
     }
@@ -422,66 +428,70 @@ class Interactor() extends Actor {
 
     for (i <- 0 until temp) {
 
-    	if (minFollowers < usersCount) {
-    	
-    		if (minFollowers == 0)
-	        noOfFollowers = r.nextInt(maxFollowers)
-	      else
-	        noOfFollowers = r.nextInt(maxFollowers - minFollowers + 1) + minFollowers
-	
-	      var j : Int = 0
-	      val user = clientList(i)
-	
-	      for (j <- 0 until noOfFollowers) {
-	        var id = r1.nextInt(usersCount)
-	        while (id == user.getID()) {
-	          id = r1.nextInt(usersCount)
-	        }
-	        if (!user.isFollowed(clientList(id)))
-		        user.addFollower(clientList(id))
-	      }
-	    }
-  	}
+      if (minFollowers < usersCount) {
+
+        if (minFollowers == 0)
+          noOfFollowers = r.nextInt(maxFollowers)
+        else
+          noOfFollowers = r.nextInt(maxFollowers - minFollowers + 1) + minFollowers
+
+        var j : Int = 0
+        val user = clientList(i)
+
+        for (j <- 0 until noOfFollowers) {
+          var id = r1.nextInt(usersCount)
+          while (id == user.getID()) {
+            id = r1.nextInt(usersCount)
+          }
+          if (!user.isFollowed(id))
+            user.addFollower(id)
+        }
+      }
+    }
 
   }
 
 }
 
 class Client(identifier : Int) extends Actor {
-  var serverActor = ClientApp.serverActor
+  var interactor : ActorRef = _
   def receive = {
+
+    case RequestRegister(serverActor, user) =>
+      interactor = sender
+      //println("Sending request " + identifier)
+      ClientApp.serverActor ! Register(identifier, user)
 
     case "ACK" =>
       println("Client " + identifier + " activated")
-      ClientApp.nRequests += 1
-      ClientApp.interActor ! ScheduleClient(identifier)
+      interactor ! ScheduleClient(identifier)
 
     case Tweet(tweet) =>
-      serverActor ! Tweet(tweet)
+      ClientApp.serverActor ! Tweet(tweet)
 
     case Top(n) =>
-      serverActor ! Top(n)
+      ClientApp.serverActor ! Top(n)
 
     case TopMentions(n) =>
-      serverActor ! TopMentions(n)
+      ClientApp.serverActor ! TopMentions(n)
 
     case TopNotifications(n) =>
-      serverActor ! TopNotifications(n)
+      ClientApp.serverActor ! TopNotifications(n)
 
     case MessageList(msgList) =>
       println("Received top messages for client: " + identifier)
       msgList.foreach(println)
-      ClientApp.interActor ! ClientCompleted
+      interactor ! ClientCompleted
 
     case MentionList(msgList) =>
       println("Received top mentions for client: " + identifier)
       msgList.foreach(println)
-      ClientApp.interActor ! ClientCompleted
+      interactor ! ClientCompleted
 
     case NotificationList(msgList) =>
       println("Received top notifications for client: " + identifier)
       msgList.foreach(println)
-      ClientApp.interActor ! ClientCompleted
+      interactor ! ClientCompleted
 
   }
 
