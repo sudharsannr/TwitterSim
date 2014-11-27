@@ -1,5 +1,9 @@
 Twitter Simulator:
 ==================
+The simulator consists of a:
+- Server that processes the tweets and assigns the designated tweets to 
+  the relevant users
+- Client that regularly sends the tweets to the server
 
 Followers generation:
 ---------------------
@@ -26,14 +30,81 @@ tweets in the range of 100000-10000000 for users having followers between
 100000-1000000 (0.1%) and in the rane of 0-50 for users having less followers 
 between 0-50 (74.1%).
 
+Tweet generation (Client functions):
+-----------------
+Tweets are generated from the server with the following criteria:
+- Random string without any handles
+- Mention a handle (limited with 4) which can be
+	- A handle can be related to its user as a:
+		- Follower
+		- Non-Follower
+	- A handle can be mentioned at:
+		- Start of the tweet
+		- Remaining part of the tweet
+
+Tweet handling (Server functions):
+---------------
+Server handles the following functionalities that classifies the
+tweet that has to be displayed at Homepage / Mentions feed / Notifications
+1. Any messages that I type goes to my followers.
+2. Mention of @username always goes to mention feed of username
+3.a) @ at beginning : any conversations between two persons 
+     p1 and p2 goes to homepage of followers of both p1 and p2
+  b) @ not at beginning : source person p1's followers will 
+     have this message
+  c) .@  : same as above
+4. Direct message: send message to followers using dm @username
+   message string
+5. Retweet: RT @uname or via @uname message
+
+
 Peak hour simulation:
 ---------------------
 In Twitter, peak hours exist during some events like World Cup. We tried to 
 simulate that behavior here by doubling the sending message rate for a short
-span of time. The server was still able to handle the burstiness.
+span of time. The server was still able to handle the burstiness. However,
+for a larger number of servers the burst in data caused the data handle to
+become slow as the remote server processing was slow with respect to the
+incoming rate.
 
 Observations:
 -------------
+The parameters in this project are:
+	Number of servers, clients
+	Peak rate, duration
+	Message limit
+Follower and message rates are obtained from twitter stats
+
+The results are expressed with respect to total time for processing
+all the messages and average message processed per second.
+
+When ran for average server size with larger client size (ideal scenario),
+the messages processed were of the order of millions. Message process
+rate was around 5000-6000 messages per second for clusters of 4. 
+The peak rate sent messages but the performance dropped (3000-
+4500 messages per second).
+
+Inferences are tabulated:
+-------------------------------------------------------------------------
+Server Size	|	Client Size	|	Result
+-------------------------------------------------------------------------
+Small		|	Small		|	Message processed without issues
+-------------------------------------------------------------------------
+Small		|	Large		|	Message queue was full on most occasions.
+			|				|	Message drops if overflow.
+			|				|	Server processing slowed if ran for a 
+			|				|	longer duration.
+-------------------------------------------------------------------------
+Large		|	Small		|	Message processed without issues
+-------------------------------------------------------------------------
+Large		|	Large		|	Processing system slowed for longer time.
+			|				|	Exceptions like java heap or stack
+			|				|	overflows were prevalent.
+-------------------------------------------------------------------------
+
+
+Results summary:
+----------------
 Number of clients: 5000
 Message limit: 10000
 Number of server actors: 20
