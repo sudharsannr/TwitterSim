@@ -7,7 +7,7 @@ import scala.util.Random
 import scala.collection.mutable.ArrayBuffer
 import scala.io.Source
 import scala.concurrent.duration._
-import akka.routing.{ FromConfig, RoundRobinRouter, Broadcast }
+import akka.routing.{ FromConfig, RoundRobinRouter, Broadcast, RandomRouter }
 import scala.actors.threadpool.AtomicInteger
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -19,7 +19,7 @@ object ClientApp extends App {
   val ipAddr : String = "127.0.0.1:8248"
   val system = ActorSystem("TwitterClientActor", ConfigFactory.load("applicationClient.conf"))
   val sActor = system.actorFor("akka.tcp://TwitterActor@" + ipAddr + "/user/Server")
-  val serverActor = system.actorOf(Props.empty.withRouter(RoundRobinRouter(routees = Vector.fill(Messages.nServers)(sActor))), "serverRouter")
+  val serverActor = system.actorOf(Props.empty.withRouter(RandomRouter(routees = Vector.fill(Messages.nServers)(sActor))), "serverRouter")
   val interActor = system.actorOf(Props[Interactor])
   interActor ! Init
 
@@ -219,7 +219,7 @@ class Interactor extends Actor {
                       idx = r.nextInt(usersCount)
                     handler.++=("@").++=(userList(idx).getName()).++=(" ")
                   }
-                  if (tweetLength <= handler.length)
+                  if (handler.length > tweetLength)
                     tweetLength = 140
                 }
                 // Followers present
@@ -271,115 +271,92 @@ class Interactor extends Actor {
               case TweetStrTo.toFollower =>
                 var followers = curUser.getFollowers()
                 var nFollowers = followers.length
-                var handler = new StringBuilder()
-                var remChars = -1
                 // No followers
                 if (nFollowers == 0) {
-                  if (nMentions > usersCount)
-                    nMentions = usersCount
-                  var followerList = ArrayBuffer.empty[Int]
-                  var i : Int = 0
-                  while (remChars < 1) {
-                    while (i < nMentions) {
-                      var idx = r.nextInt(usersCount)
-                      while (idx == curUser.getID())
-                        idx = r.nextInt(usersCount)
-                      if (!followerList.contains(idx)) {
-                        followerList.+=(idx)
-                        handler.++=("@").++=(userList(idx).getName()).++=(" ")
-                        i += 1
-                      }
-                    }
-                    if (tweetLength <= handler.length)
-                      tweetLength = 140
-                    remChars = tweetLength - handler.length - 1
-                  }
-
-                  // Pick the string split
-                  var str1Len = r.nextInt(remChars)
-                  var str1 : String = randomString(str1Len)
-                  var str2 : String = ""
-                  var splitIdx = remChars - str1Len
-                  if (splitIdx > 0)
-                    str2 = randomString(splitIdx)
-                  return str1 + " " + handler.toString + str2
+                  randStringtoRandUser(nMentions, tweetLength, r, curUser)
                 }
 
                 // Followers present
                 else {
-                  var remChars = -1
-                  // Count correction
-                  if (nMentions > nFollowers)
-                    nMentions = nFollowers
-                  while (remChars < 1) {
-                    var handler = new StringBuilder()
-                    var followerList = ArrayBuffer.empty[Int]
-                    var i : Int = 0
-                    while (i < nMentions) {
-                      var follower = followers(r.nextInt(nFollowers))
-                      if (!followerList.contains(follower)) {
-                        followerList.+=(follower)
-                        handler.++=("@").++=(userList(follower).getName()).++=(" ")
-                        i += 1
-                      }
-                    }
-                    if (handler.length > tweetLength)
-                      tweetLength = 140
-                    remChars = tweetLength - handler.length - 1
-                    // Increase the messsage length if closer on completion
-                    if (remChars == 0 && tweetLength < 140)
-                      remChars += Messages.avgTweetLength
-                  }
-
-                  // Find split index for string
-                  var str1Len = r.nextInt(remChars)
-                  var str1 : String = randomString(str1Len)
-                  var str2 : String = ""
-                  var splitIdx = remChars - str1Len
-                  if (splitIdx > 0)
-                    str2 = randomString(splitIdx)
-                  return str1 + " " + handler.toString + str2
+                  randStringtoFollower(nMentions, tweetLength, r, curUser, followers.asInstanceOf[List[Int]])
                 }
 
               case TweetStrTo.toRandomUser =>
-                var remChars = -1
-                var handler = new StringBuilder()
-                var followerList = ArrayBuffer.empty[Int]
-                // Count correction
-                if (nMentions > usersCount)
-                  nMentions = usersCount
-                var i : Int = 0
-
-                // FIXME Possible infinite loop
-                while (remChars < 1) {
-                  while (i < nMentions) {
-                    var idx = r.nextInt(usersCount)
-                    while (idx == curUser.getID())
-                      idx = r.nextInt(usersCount)
-                    if (!followerList.contains(idx)) {
-                      followerList.+=(idx)
-                      i += 1
-                      handler.++=("@").++=(userList(idx).getName())
-                    }
-                  }
-                  if (tweetLength <= handler.length)
-                    tweetLength = 140
-                  remChars = tweetLength - handler.length - 1
-                  if (remChars == 0 && tweetLength < 140)
-                    remChars += Messages.avgTweetLength
-                }
-
-                // Find the string split
-                var str1Len = r.nextInt(remChars)
-                var str1 : String = randomString(str1Len)
-                var str2 : String = ""
-                var splitIdx = remChars - str1Len
-                if (splitIdx > 0)
-                  str2 = randomString(splitIdx)
-                return str1 + " " + handler.toString + str2
+                randStringtoRandUser(nMentions, tweetLength, r, curUser)
             }
         }
     }
+  }
+
+  def randStringtoFollower(nMention : Int, tweetLen : Int, r : Random, curUser : User, followers : List[Int]) : String = {
+    var nMentions = nMention
+    var tweetLength = tweetLen
+    if (nMentions > usersCount)
+      nMentions = usersCount
+    var followersCount = followers.length
+    var followerList = ArrayBuffer.empty[Int]
+    var i : Int = 0
+    while (i < nMentions) {
+      var fIdx = followers(r.nextInt(followersCount))
+      if (!followerList.contains(fIdx)) {
+        followerList.+=(fIdx)
+        i += 1
+      }
+    }
+
+    var handleLength = 0
+    for (fIdx <- followerList)
+      handleLength += userList(fIdx).getName().length()
+
+    if (tweetLength < handleLength)
+      tweetLength = 140
+
+    // Pick the user index split
+    var splitIdx = r.nextInt(nMentions)
+    var str1 = new StringBuilder()
+    var str3 = new StringBuilder()
+    for (i <- 0 until splitIdx)
+      str1.++=(userList(followerList(i)).getName()).++=(" ")
+    for (i <- splitIdx until nMentions)
+      str3.++=(userList(followerList(i)).getName()).++=(" ")
+    var str2 = randomString(tweetLength - (str1.length + str3.length))
+    return str1.toString + str2 + str3.toString
+  }
+
+  def randStringtoRandUser(nMention : Int, tweetLen : Int, r : Random, curUser : User) : String = {
+    var nMentions = nMention
+    var tweetLength = tweetLen
+    if (nMentions > usersCount)
+      nMentions = usersCount
+    var followerList = ArrayBuffer.empty[Int]
+    var i : Int = 0
+    while (i < nMentions) {
+      var idx = r.nextInt(usersCount)
+      while (idx == curUser.getID())
+        idx = r.nextInt(usersCount)
+      if (!followerList.contains(idx)) {
+        followerList.+=(idx)
+        i += 1
+      }
+    }
+
+    var handleLength = 0
+    for (fIdx <- followerList)
+      handleLength += userList(fIdx).getName().length()
+
+    if (tweetLength < handleLength)
+      tweetLength = 140
+
+    // Pick the user index split
+    var splitIdx = r.nextInt(nMentions)
+    var str1 = new StringBuilder()
+    var str3 = new StringBuilder()
+    for (i <- 0 until splitIdx)
+      str1.++=(userList(followerList(i)).getName()).++=(" ")
+    for (i <- splitIdx until nMentions)
+      str3.++=(userList(followerList(i)).getName()).++=(" ")
+    var str2 = randomString(tweetLength - (str1.length + str3.length))
+    return str1.toString + str2 + str3.toString
   }
 
   def randomString(length : Int) : String = {
@@ -458,7 +435,7 @@ class Interactor extends Actor {
         var id = r1.nextInt(usersCount)
         while (id == i)
           id = r1.nextInt(usersCount)
-        user.addFollower(id)
+        //user.addFollower(id)
       }
     }
   }
