@@ -12,7 +12,7 @@ import scala.actors.threadpool.AtomicInteger
 import java.util.concurrent.atomic.AtomicBoolean
 
 //FIXME Load balancing to be done
-//FIXME StackOverflow error for actors >= 5000
+//FIXME Flow control required. 
 object ClientApp extends App {
 
   //TODO Param
@@ -59,7 +59,7 @@ class Interactor extends Actor {
     case ScheduleClient =>
       if (!limitReached.get()) {
         val curUser = userMap(sender)
-        println("Scheduling client " + curUser.getID())
+        //println("Scheduling client " + curUser.getID())
         var cancellable = context.system.scheduler.schedule(0.seconds, curUser.getMessageRate().seconds)(sendMsg(sender, curUser))
         cancelMap += (sender -> cancellable)
       }
@@ -100,13 +100,12 @@ class Interactor extends Actor {
     nMessages.incrementAndGet()
     println(nMessages)
     // Comparison greater when the message rate during peak exceeds the set limit
-    if (nMessages.get() >= Messages.msgLimit) {
+    // FIXME Getting called multiple times. 
+    if (nMessages.get() >= Messages.msgLimit && !limitReached.get()) {
       println("Limit reached!")
-      if (!limitReached.get()) {
-        for (cancellable <- cancelMap.values)
-          cancellable.cancel()
-      }
       limitReached.set(true)
+      for (cancellable <- cancelMap.values)
+        cancellable.cancel()
       directMessage()
       reTweet()
     }
@@ -118,6 +117,7 @@ class Interactor extends Actor {
       if (curTime >= Messages.peakStart && curTime < Messages.peakEnd) {
         for (i <- 0 to Messages.peakScale) {
           var rndTweet = randomTweet(curUser)
+          println("Sending message " + rndTweet)
           actor ! Tweet(rndTweet)
         }
         nMessages.addAndGet(Messages.peakScale - 1)
@@ -125,6 +125,7 @@ class Interactor extends Actor {
 
       else {
         var rndTweet = randomTweet(curUser)
+        println("Sending message " + rndTweet)
         curUser.addMessage(rndTweet)
         actor ! Tweet(rndTweet)
       }
@@ -172,7 +173,8 @@ class Interactor extends Actor {
           else
             tweet = tweetString + " " + rtKeys(rtIdx) + twUser.getName()
         }
-        revMap.get(curUser).get ! Tweet(tweet)
+        if(tweet.length() > 0)
+        	revMap.get(curUser).get ! Tweet(tweet)
       }
     }
     self ! PrintMessages
@@ -454,25 +456,23 @@ class Interactor extends Actor {
 }
 
 class UserActor extends Actor {
-  var serverActor : ActorRef = _
 
   def receive = {
 
     case "ACK" =>
-      serverActor = sender
       ClientApp.interActor ! ScheduleClient
 
     case Tweet(tweet) =>
-      serverActor ! Tweet(tweet)
+      ClientApp.serverActor ! Tweet(tweet)
 
     case Top(n) =>
-      serverActor ! Top(n)
+      ClientApp.serverActor ! Top(n)
 
     case TopMentions(n) =>
-      serverActor ! TopMentions(n)
+      ClientApp.serverActor ! TopMentions(n)
 
     case TopNotifications(n) =>
-      serverActor ! TopNotifications(n)
+      ClientApp.serverActor ! TopNotifications(n)
 
     case MessageList(msgList, id) =>
       println("Printing messages for user " + id)
