@@ -25,8 +25,8 @@ object ServerShare {
   var timeElapsed : Int = 0
   var totalMessagesRec : Int = 0
 
-  import ServerApp.system.dispatcher
-  ServerApp.system.scheduler.schedule(0.seconds, 1.seconds)(printServerHandledMessages())
+//  import ServerApp.system.dispatcher
+//  ServerApp.system.scheduler.schedule(0.seconds, 1.seconds)(printServerHandledMessages())
 
   //FIXME Doesn't cound valid
   def printServerHandledMessages() {
@@ -62,8 +62,8 @@ class Server extends Actor {
       actor ! "ACK"
 
     case Tweet(tweet) =>
+      println("Received tweet " + tweet)
       ServerShare.messagesReceived += 1
-      println("Received " + tweet)
       var user = ServerShare.userMap(sender)
       val rtPattern = "via @\\w+$".r
       // Direct messaging
@@ -77,12 +77,13 @@ class Server extends Actor {
       }
       // Retweet with rt or via parameter
       else if (tweet.startsWith(Messages.rtKeys(0)) || ("" != (rtPattern findFirstIn tweet).mkString)) {
+        println("Handling retweet")
         for (follower <- user.getFollowers())
           //TODO Test
           ServerShare.usersList(follower).addMessage(tweet)
       }
+      // Normal tweet processing
       else {
-
         var index = tweet.indexOf('@')
         var followersSet : HashSet[User] = HashSet()
         var username = findMentionedUsername(tweet, index + 1)

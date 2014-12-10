@@ -6,7 +6,7 @@ import scala.collection.mutable.ListBuffer
 object Messages {
 
   val requestString : String = "REQUEST"
-  val nServers : Int = 20
+  val nServers : Int = 4
   val nClients : Int = 100
   val maxNeighbors : Int = nClients - 1
   val msgLimit : Int = 10000
@@ -19,7 +19,7 @@ object Messages {
   val maxMentions : Int = 6
   val peakStart : Int = 20
   val peakEnd : Int = 40
-  val peakScale : Int = 10
+  val peakScale : Int = 1
   val chunkSize : Int = 100
 
   sealed trait TwitterMessage

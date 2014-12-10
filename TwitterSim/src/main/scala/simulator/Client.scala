@@ -59,8 +59,8 @@ class Interactor extends Actor {
     case ScheduleClient =>
       if (!limitReached.get()) {
         val curUser = userMap(sender)
-        //println("Scheduling client " + curUser.getID())
-        var cancellable = context.system.scheduler.schedule(0.seconds, curUser.getMessageRate().seconds)(sendMsg(sender, curUser))
+        println("Scheduling client " + curUser.getID())
+        var cancellable = context.system.scheduler.schedule(0.seconds, curUser.getMessageRate().seconds)(sendMsg(curUser))
         cancelMap += (sender -> cancellable)
       }
 
@@ -83,20 +83,21 @@ class Interactor extends Actor {
           case 1 => self ! PrintNotifications
           case 2 => self ! PrintMentions
           case 3 =>
+          case 4 =>
         }
       }
 
     case Terminated(ref) =>
       userMap -= ref
       if (userMap.isEmpty) {
-        println("Shutting down")
-        ClientApp.serverActor ! Broadcast(PoisonPill)
-        context.system.shutdown()
+        println("Process done")
+        //ClientApp.serverActor ! Broadcast(PoisonPill)
+        //context.system.shutdown()
       }
 
   }
 
-  def sendMsg(actor : ActorRef, curUser : User) = {
+  def sendMsg(curUser : User) = {
     nMessages.incrementAndGet()
     println(nMessages)
     // Comparison greater when the message rate during peak exceeds the set limit
@@ -117,17 +118,19 @@ class Interactor extends Actor {
       if (curTime >= Messages.peakStart && curTime < Messages.peakEnd) {
         for (i <- 0 to Messages.peakScale) {
           var rndTweet = randomTweet(curUser)
+          //var rndTweet = "hello"
           println("Sending message " + rndTweet)
-          actor ! Tweet(rndTweet)
+          ClientApp.serverActor ! Tweet(rndTweet)
         }
         nMessages.addAndGet(Messages.peakScale - 1)
       }
 
       else {
         var rndTweet = randomTweet(curUser)
+        //var rndTweet = "hello"
         println("Sending message " + rndTweet)
         curUser.addMessage(rndTweet)
-        actor ! Tweet(rndTweet)
+        ClientApp.serverActor ! Tweet(rndTweet)
       }
     }
   }
@@ -173,8 +176,8 @@ class Interactor extends Actor {
           else
             tweet = tweetString + " " + rtKeys(rtIdx) + twUser.getName()
         }
-        if(tweet.length() > 0)
-        	revMap.get(curUser).get ! Tweet(tweet)
+        if (tweet.length() > 0)
+          revMap.get(curUser).get ! Tweet(tweet)
       }
     }
     self ! PrintMessages

@@ -4,15 +4,16 @@ import akka.actor._
 import scala.collection.mutable.MutableList
 import scala.util.Random
 import java.util.concurrent.LinkedBlockingQueue
+import org.apache.commons.collections4.queue.CircularFifoQueue
 
 class User(identifier : Int) extends Serializable {
 
   var name : String = _
   var messageRate : Int = 0
   var followers = new MutableList[Int]()
-  var mentions = new LinkedBlockingQueue[String](Messages.maxBufferSize)
-  var messageQueue = new LinkedBlockingQueue[String](Messages.maxBufferSize)
-  var notifications = new LinkedBlockingQueue[String](Messages.maxBufferSize)
+  var mentions = new CircularFifoQueue[String](Messages.maxBufferSize)
+  var messageQueue = new CircularFifoQueue[String](Messages.maxBufferSize)
+  var notifications = new CircularFifoQueue[String](Messages.maxBufferSize)
 
   override def equals(o : Any) = o match {
     case that : User => that.name.equals(this.name)
@@ -78,24 +79,27 @@ class User(identifier : Int) extends Serializable {
   }
 
   def addMessage(message : String) {
-    if (messageQueue.size() >= Messages.maxBufferSize)
-      messageQueue.poll()
-    messageQueue.offer(message)
+    //if (messageQueue.size() >= Messages.maxBufferSize)
+      //messageQueue.poll()
+    //messageQueue.offer(message)
+    messageQueue.add(message)
   }
   
   def addMention(message : String) {
-    if (mentions.size() >= Messages.maxBufferSize)
-      mentions.poll()
-    mentions.offer(message)
+    //if (mentions.size() >= Messages.maxBufferSize)
+      //mentions.poll()
+    //mentions.offer(message)
+    mentions.add(message)
   }
 
   def addNotification(message : String) {
-    if (notifications.size() >= Messages.maxBufferSize)
-      notifications.poll()
-    notifications.offer(message)
+//    if (notifications.size() >= Messages.maxBufferSize)
+//      notifications.poll()
+//    notifications.offer(message)
+    notifications.add(message)
   }
 
-  def getMessages() : LinkedBlockingQueue[String] = {
+  def getMessages() : CircularFifoQueue[String] = {
     return messageQueue
   }
 
