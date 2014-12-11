@@ -16,27 +16,27 @@ object ServerApp extends App {
 
 }
 
-object ServerShare {
-  var userMap : Map[ActorRef, User] = Map();
-  var usersList : ListBuffer[User] = ListBuffer.empty[User]
-  var messagesReceived : Int = 0
-  var nReceived : Int = 0
-  var averageRec : Int = 0
-  var timeElapsed : Int = 0
-  var totalMessagesRec : Int = 0
+object Server {
+  private var userMap : Map[ActorRef, User] = Map();
+  private var usersList : ListBuffer[User] = ListBuffer.empty[User]
+  private var messagesReceived : Int = 0
+  private var nReceived : Int = 0
+  private var averageRec : Int = 0
+  private var timeElapsed : Int = 0
+  private var totalMessagesRec : Int = 0
 
-  import ServerApp.system.dispatcher
-  ServerApp.system.scheduler.schedule(0.seconds, 1.seconds)(printServerHandledMessages())
+  //  import ServerApp.system.dispatcher
+  //  ServerApp.system.scheduler.schedule(0.seconds, 1.seconds)(printServerHandledMessages())
 
   //FIXME Doesn't cound valid
   def printServerHandledMessages() {
-    println("Messages received from clients: " + ServerShare.messagesReceived + " per sec")
-    ServerShare.timeElapsed += 1
-    ServerShare.totalMessagesRec += ServerShare.messagesReceived
-    ServerShare.averageRec = ServerShare.totalMessagesRec / ServerShare.timeElapsed
-    ServerShare.messagesReceived = 0
-    println("Average msg per sec: " + ServerShare.averageRec)
-    println("Time Elapsed: " + ServerShare.timeElapsed)
+    println("Messages received from clients: " + Server.messagesReceived + " per sec")
+    Server.timeElapsed += 1
+    Server.totalMessagesRec += Server.messagesReceived
+    Server.averageRec = Server.totalMessagesRec / Server.timeElapsed
+    Server.messagesReceived = 0
+    println("Average msg per sec: " + Server.averageRec)
+    println("Time Elapsed: " + Server.timeElapsed)
   }
 }
 
@@ -57,14 +57,14 @@ class Server extends Actor {
 
     case RegisterClients(actor, curUser) =>
       println("Registering client " + curUser.getID())
-      ServerShare.userMap += (actor -> curUser)
-      ServerShare.usersList += curUser
+      Server.userMap += (actor -> curUser)
+      Server.usersList += curUser
       actor ! "ACK"
 
     case Tweet(tweet) =>
-      ServerShare.messagesReceived += 1
-      println("Received " + tweet)
-      var user = ServerShare.userMap(sender)
+      Server.messagesReceived += 1
+      println("Received tweet " + tweet)
+      var user = Server.userMap(sender)
       val rtPattern = "via @\\w+$".r
       // Direct messaging
       if (tweet.startsWith("dm ")) {
@@ -72,14 +72,14 @@ class Server extends Actor {
         if (toHandler.length() > 0) {
           val toUser = new User(0)
           toUser.setUserName(toHandler.substring(1))
-          ServerShare.usersList(ServerShare.usersList.indexOf(toUser)).addNotification(tweet)
+          Server.usersList(Server.usersList.indexOf(toUser)).addNotification(tweet)
         }
       }
       // Retweet with rt or via parameter
       else if (tweet.startsWith(Messages.rtKeys(0)) || ("" != (rtPattern findFirstIn tweet).mkString)) {
         for (follower <- user.getFollowers())
           //TODO Test
-          ServerShare.usersList(follower).addMessage(tweet)
+          Server.usersList(follower).addMessage(tweet)
       }
       else {
 
@@ -89,7 +89,7 @@ class Server extends Actor {
         if (index == 0) {
           var mentionedUser = new User(0)
           mentionedUser.setUserName(username)
-          var mentionedUserObj = ServerShare.usersList(ServerShare.usersList.indexOf(mentionedUser))
+          var mentionedUserObj = Server.usersList(Server.usersList.indexOf(mentionedUser))
 
           //mentioned person's mentions tab
           mentionedUserObj.addMention(tweet)
@@ -121,7 +121,7 @@ class Server extends Actor {
             var mentionedExtraUsers = new User(0)
             mentionedExtraUsers.setUserName(username)
 
-            var mentionedExtraUsersObj = ServerShare.usersList(ServerShare.usersList.indexOf(mentionedExtraUsers))
+            var mentionedExtraUsersObj = Server.usersList(Server.usersList.indexOf(mentionedExtraUsers))
 
             mentionedExtraUsersObj.addMention(tweet)
             if (mentionedExtraUsersObj.isFollowed(user)) {
@@ -152,7 +152,7 @@ class Server extends Actor {
           //Sender's followers timelines
           var followers = user.getFollowers()
           for (eachFollower <- followers) {
-            ServerShare.usersList(eachFollower).addMessage(tweet)
+            Server.usersList(eachFollower).addMessage(tweet)
           }
 
           index = index + 1 + username.length()
@@ -164,7 +164,7 @@ class Server extends Actor {
 
             var mentionedExtraUsers = new User(0)
             mentionedExtraUsers.setUserName(username)
-            var mentionedExtraUsersObj = ServerShare.usersList(ServerShare.usersList.indexOf(mentionedExtraUsers))
+            var mentionedExtraUsersObj = Server.usersList(Server.usersList.indexOf(mentionedExtraUsers))
 
             if (!user.isFollowed(mentionedExtraUsersObj)) {
               mentionedExtraUsersObj.addMention(tweet)
@@ -181,15 +181,15 @@ class Server extends Actor {
       }
 
     case Top(n) =>
-      var user = ServerShare.userMap(sender)
+      var user = Server.userMap(sender)
       sender ! MessageList(user.getRecentMessages(), user.getID())
 
     case TopMentions(n) =>
-      var user = ServerShare.userMap(sender)
+      var user = Server.userMap(sender)
       sender ! MentionList(user.getRecentMentions(), user.getID())
 
     case TopNotifications(n) =>
-      var user = ServerShare.userMap(sender)
+      var user = Server.userMap(sender)
       sender ! NotificationList(user.getRecentNotifications(), user.getID())
 
   }
@@ -242,7 +242,7 @@ class Server extends Actor {
   }
 
   def getUser(id : Int) : User = {
-    ServerShare.usersList.foreach {
+    Server.usersList.foreach {
       cur =>
         if (cur.getID() == id)
           return cur

@@ -20,12 +20,12 @@ object ClientApp extends App {
   val system = ActorSystem("TwitterClientActor", ConfigFactory.load("applicationClient.conf"))
   val sActor = system.actorFor("akka.tcp://TwitterActor@" + ipAddr + "/user/Server")
   val serverActor = system.actorOf(Props.empty.withRouter(RandomRouter(routees = Vector.fill(Messages.nServers)(sActor))), "serverRouter")
-  val interActor = system.actorOf(Props[Interactor])
+  val interActor = system.actorOf(Props(new Interactor(serverActor)))
   interActor ! Init
 
 }
 
-class Interactor extends Actor {
+class Interactor(serverActor : ActorRef) extends Actor {
 
   val startTime = java.lang.System.currentTimeMillis()
   val usersCount = Messages.nClients
@@ -60,7 +60,8 @@ class Interactor extends Actor {
       if (!limitReached.get()) {
         val curUser = userMap(sender)
         //println("Scheduling client " + curUser.getID())
-        var cancellable = context.system.scheduler.schedule(0.seconds, curUser.getMessageRate().seconds)(sendMsg(sender, curUser))
+        var clientActor = sender
+        var cancellable = context.system.scheduler.schedule(0.seconds, curUser.getMessageRate().seconds)(sendMsg(clientActor, curUser))
         cancelMap += (sender -> cancellable)
       }
 
@@ -96,7 +97,7 @@ class Interactor extends Actor {
 
   }
 
-  def sendMsg(actor : ActorRef, curUser : User) = {
+  def sendMsg(clientActor : ActorRef, curUser : User) = {
     nMessages.incrementAndGet()
     println(nMessages)
     // Comparison greater when the message rate during peak exceeds the set limit
@@ -117,17 +118,15 @@ class Interactor extends Actor {
       if (curTime >= Messages.peakStart && curTime < Messages.peakEnd) {
         for (i <- 0 to Messages.peakScale) {
           var rndTweet = randomTweet(curUser)
-          println("Sending message " + rndTweet)
-          actor ! Tweet(rndTweet)
+          clientActor ! Tweet(rndTweet)
         }
         nMessages.addAndGet(Messages.peakScale - 1)
       }
 
       else {
         var rndTweet = randomTweet(curUser)
-        println("Sending message " + rndTweet)
         curUser.addMessage(rndTweet)
-        actor ! Tweet(rndTweet)
+        clientActor ! Tweet(rndTweet)
       }
     }
   }
@@ -463,6 +462,7 @@ class UserActor extends Actor {
       ClientApp.interActor ! ScheduleClient
 
     case Tweet(tweet) =>
+      println("Sending message " + tweet)
       ClientApp.serverActor ! Tweet(tweet)
 
     case Top(n) =>
