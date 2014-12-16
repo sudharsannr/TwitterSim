@@ -7,12 +7,12 @@ import java.util.concurrent.LinkedBlockingQueue
 
 class User(identifier : Int) extends Serializable {
 
-  var name : String = _
-  var messageRate : Int = 0
-  var followers = new MutableList[Int]()
-  var mentions = new LinkedBlockingQueue[String](Messages.maxBufferSize)
-  var messageQueue = new LinkedBlockingQueue[String](Messages.maxBufferSize)
-  var notifications = new LinkedBlockingQueue[String](Messages.maxBufferSize)
+  private var name : String = _
+  private var messageRate : Int = 0
+  private var followers = new MutableList[Int]()
+  private var mentions = new LinkedBlockingQueue[String](Messages.maxBufferSize)
+  private var messageQueue = new LinkedBlockingQueue[String](Messages.maxBufferSize)
+  private var notifications = new LinkedBlockingQueue[String](Messages.maxBufferSize)
 
   override def equals(o : Any) = o match {
     case that : User => that.name.equals(this.name)

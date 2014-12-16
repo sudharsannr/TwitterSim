@@ -7,18 +7,48 @@ import scala.collection.mutable.ListBuffer
 import scala.util.control.Breaks._
 import scala.collection.mutable.HashSet
 import scala.concurrent.duration._
+import org.json4s.native.Serialization
+import org.json4s.native.Serialization._
+import org.json4s.ShortTypeHints
+import spray.routing._
+import spray._
+import spray.http.MediaTypes
+import akka.pattern.ask
+import akka.util.Timeout
 
-object ServerApp extends App {
 
-  val system = ActorSystem("TwitterActor")
-  val server = system.actorOf(Props[Server], name = "Server")
+object ServerApp extends App with SimpleRoutingApp{
+
+  implicit val system = ActorSystem("TwitterActor")
+  implicit val server = system.actorOf(Props[Server], name = "Server")
   var nRequests : Int = 0
+	implicit val timeout = Timeout(1.second)
+  import system.dispatcher
+  
+	def getJson(route: Route) = get {
+    respondWithMediaType(MediaTypes.`application/json`) { route }
+  }
 
+   lazy val serverRoute = {
+    get {
+      path("get" / "tweets") {
+        complete {
+        	//Server.toJson(Server.getUserList(1))
+        	(server ? getUserObj(1)).mapTo[User].map(s => Server.toJson(s))
+        }
+      }
+    }
+  }
+
+  startServer(interface = "localhost", port = 8080) {
+    serverRoute
+  }
+  
 }
 
 object Server {
   private var userMap : Map[ActorRef, User] = Map();
-  private var usersList : ListBuffer[User] = ListBuffer.empty[User]
+  var usersList : ListBuffer[User] = ListBuffer.empty[User]
   private var messagesReceived : Int = 0
   private var nReceived : Int = 0
   private var averageRec : Int = 0
@@ -38,6 +68,19 @@ object Server {
     println("Average msg per sec: " + Server.averageRec)
     println("Time Elapsed: " + Server.timeElapsed)
   }
+  
+  def getUserList(id : Int) : User = {
+  	return Server.usersList(id)
+  }
+  
+  
+  import org.json4s.native.Serialization.write
+  import org.json4s.{FieldSerializer, DefaultFormats}
+  //private implicit val formats = Serialization.formats(ShortTypeHints(List(classOf[Server])))
+  private implicit val formats = DefaultFormats + FieldSerializer[User]()
+  def toJson(users: ListBuffer[User]): String = writePretty(users)
+  def toJson(amber: User): String = writePretty(amber)
+  
 }
 
 /**
@@ -55,6 +98,9 @@ class Server extends Actor {
   println("Server started!")
   def receive = {
 
+  	case getUserObj(id) =>
+  		sender ! Server.usersList(id)
+  	
     case RegisterClients(actor, curUser) =>
       println("Registering client " + curUser.getID())
       Server.userMap += (actor -> curUser)

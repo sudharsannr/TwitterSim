@@ -19,7 +19,7 @@ object ClientApp extends App {
   val ipAddr : String = "127.0.0.1:8248"
   val system = ActorSystem("TwitterClientActor", ConfigFactory.load("applicationClient.conf"))
   val sActor = system.actorFor("akka.tcp://TwitterActor@" + ipAddr + "/user/Server")
-  val serverActor = system.actorOf(Props.empty.withRouter(RandomRouter(routees = Vector.fill(Messages.nServers)(sActor))), "serverRouter")
+  val serverActor = system.actorOf(Props.empty.withRouter(RoundRobinRouter(routees = Vector.fill(Messages.nServers)(sActor))), "serverRouter")
   val interActor = system.actorOf(Props(new Interactor(serverActor)))
   interActor ! Init
 
