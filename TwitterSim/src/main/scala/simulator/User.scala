@@ -90,6 +90,7 @@ class User(identifier : Int) extends Serializable {
   }
 
   def addNotification(message : String) {
+    println("Notifications added for user " + identifier)
     if (notifications.size() >= Messages.maxBufferSize)
       notifications.poll()
     notifications.offer(message)

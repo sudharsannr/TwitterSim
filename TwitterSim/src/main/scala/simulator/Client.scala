@@ -12,6 +12,7 @@ import scala.actors.threadpool.AtomicInteger
 import java.util.concurrent.atomic.AtomicBoolean
 import spray.http._
 import spray.client.pipelining._
+import scala.collection.mutable.MutableList
 
 //FIXME Load balancing to be done
 //FIXME Flow control required. 
@@ -88,7 +89,7 @@ class Interactor(serverActor : ActorRef) extends Actor {
         queueCount.incrementAndGet() match {
           case 1 => self ! PrintNotifications
           case 2 => self ! PrintMentions
-          case 3 =>
+          case default => 
         }
       }
 
@@ -148,7 +149,8 @@ class Interactor(serverActor : ActorRef) extends Actor {
           val count = rand.nextInt(followers.size)
           for (i <- 0 until count) {
             val toAddr = "dm @" + userList(followers(rand.nextInt(followers.size))).getName()
-            actor ! Tweet(toAddr + " " + randomString(140 - toAddr.length() - 1))
+            val tweetStr = toAddr + " " + randomString(140 - toAddr.length() - 1)
+            actor ! Tweet(tweetStr)
           }
         }
     }
@@ -186,7 +188,7 @@ class Interactor(serverActor : ActorRef) extends Actor {
   }
 
   def randomTweet(curUser : User) : String = {
-
+    //println("Inside randomtweet")
     /**
      * Tweet cases
      * 	without @
@@ -202,16 +204,20 @@ class Interactor(serverActor : ActorRef) extends Actor {
     var r = new Random()
     RandomPicker.pickRandom(TweetStrAt) match {
       case TweetStrAt.withoutAt =>
+        //println("Without @")
         randomString(tweetLength)
 
       case TweetStrAt.withAt =>
+        //println("With @")
         var nMentions = 1 + Random.nextInt(Messages.maxMentions)
         RandomPicker.pickRandom(TweetStrAtPos) match {
 
           case TweetStrAtPos.atBeginning =>
+            //println("@ beginning")
             RandomPicker.pickRandom(TweetStrTo) match {
 
               case TweetStrTo.toFollower =>
+                //println("to follower")
                 var followers = curUser.getFollowers()
                 var nFollowers = followers.length
                 var handler = new StringBuilder()
@@ -251,6 +257,7 @@ class Interactor(serverActor : ActorRef) extends Actor {
                 return handler.mkString + randomString(tweetLength - handler.length)
 
               case TweetStrTo.toRandomUser =>
+                //println("to random")
                 var handler = new StringBuilder()
                 // Count correction
                 if (nMentions > usersCount)
@@ -273,34 +280,41 @@ class Interactor(serverActor : ActorRef) extends Actor {
             }
 
           case TweetStrAtPos.atNotBeginning =>
+            //println("@ not beginning")
             RandomPicker.pickRandom(TweetStrTo) match {
 
               case TweetStrTo.toFollower =>
+                //println("to follower")
                 var followers = curUser.getFollowers()
                 var nFollowers = followers.length
                 // No followers
                 if (nFollowers == 0) {
+                  //println("zero followers")
                   randStringtoRandUser(nMentions, tweetLength, r, curUser)
                 }
 
                 // Followers present
                 else {
-                  randStringtoFollower(nMentions, tweetLength, r, curUser, followers.asInstanceOf[List[Int]])
+                  //println("legit")
+                  randStringtoFollower(nMentions, tweetLength, r, curUser, followers.asInstanceOf[MutableList[Int]])
                 }
 
               case TweetStrTo.toRandomUser =>
+                //println("to random")
                 randStringtoRandUser(nMentions, tweetLength, r, curUser)
             }
         }
     }
   }
 
-  def randStringtoFollower(nMention : Int, tweetLen : Int, r : Random, curUser : User, followers : List[Int]) : String = {
+  def randStringtoFollower(nMention : Int, tweetLen : Int, r : Random, curUser : User, followers : MutableList[Int]) : String = {
     var nMentions = nMention
     var tweetLength = tweetLen
     if (nMentions > usersCount)
       nMentions = usersCount
     var followersCount = followers.length
+    if(nMentions > followersCount)
+      nMentions = followersCount
     var followerList = ArrayBuffer.empty[Int]
     var i : Int = 0
     while (i < nMentions) {
@@ -436,13 +450,14 @@ class Interactor(serverActor : ActorRef) extends Actor {
     var r1 = new Random();
     var noOfFollowers : Int = 0
     for (i <- 0 until nUsers) {
-      noOfFollowers = r.nextInt(maxFollowers - minFollowers + 1) + minFollowers
+      //noOfFollowers = r.nextInt(maxFollowers - minFollowers + 1) + minFollowers
+      noOfFollowers = 10
       val user = userList(i)
       for (j <- 0 until noOfFollowers) {
         var id = r1.nextInt(usersCount)
         while (id == i)
           id = r1.nextInt(usersCount)
-        //user.addFollower(id)
+        user.addFollower(id)
       }
     }
   }
