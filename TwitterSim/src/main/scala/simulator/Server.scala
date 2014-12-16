@@ -15,6 +15,7 @@ import spray._
 import spray.http.MediaTypes
 import akka.pattern.ask
 import akka.util.Timeout
+import scala.collection.mutable.MutableList
 
 
 object ServerApp extends App with SimpleRoutingApp{
@@ -37,7 +38,7 @@ object ServerApp extends App with SimpleRoutingApp{
         	(server ? getUserObj(clientId)).mapTo[User].map(s => Server.toJson(s))
         }
       }
-    } ~
+    }~
     get {
       path("get" / "all" /"tweets") {
         complete {
@@ -53,6 +54,13 @@ object ServerApp extends App with SimpleRoutingApp{
           complete {
             "OK"
           }
+        }
+      }
+    }~
+    get {
+      path("get" / "followers" / IntNumber) {clientId =>
+        complete {
+        	(server ? GetMyFollowers(clientId)).mapTo[MutableList[Int]].map(s => Server.toJson(s))
         }
       }
     }
@@ -89,10 +97,10 @@ object Server {
   
   import org.json4s.native.Serialization.write
   import org.json4s.{FieldSerializer, DefaultFormats}
-  //private implicit val formats = Serialization.formats(ShortTypeHints(List(classOf[Server])))
   private implicit val formats = DefaultFormats + FieldSerializer[User]()
   def toJson(users: ListBuffer[User]): String = writePretty(users)
   def toJson(amber: User): String = writePretty(amber)
+  def toJson(followers: MutableList[Int]): String = writePretty(followers)
   
 }
 
@@ -110,7 +118,13 @@ class Server extends Actor {
 
   println("Server started!")
   def receive = {
-
+  	
+  	//REST call
+  	case GetMyFollowers(id) =>
+  		var userObj = getUser(id)
+  		userObj.getFollowers()
+  		
+  	//REST call
   	case PostTweets(id, tweet) =>
   		Server.messagesReceived += 1
       println("Received tweet " + tweet)
