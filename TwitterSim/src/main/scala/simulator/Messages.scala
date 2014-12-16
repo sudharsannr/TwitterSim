@@ -43,4 +43,6 @@ object Messages {
   case object ShutDown extends TwitterMessage
   case object ClientCompleted extends TwitterMessage
   case class getUserObj(id: Int) extends TwitterMessage
+  case object GetAllUserObj extends TwitterMessage
+  case class PostTweets(id : Int, message : String) extends TwitterMessage
 }

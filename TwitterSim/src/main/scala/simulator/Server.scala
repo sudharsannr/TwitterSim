@@ -31,15 +31,33 @@ object ServerApp extends App with SimpleRoutingApp{
 
    lazy val serverRoute = {
     get {
-      path("get" / "tweets") {
+      path("get" / "tweets" / IntNumber) { clientId =>
         complete {
         	//Server.toJson(Server.getUserList(1))
-        	(server ? getUserObj(1)).mapTo[User].map(s => Server.toJson(s))
+        	(server ? getUserObj(clientId)).mapTo[User].map(s => Server.toJson(s))
+        }
+      }
+    } ~
+    get {
+      path("get" / "all" /"tweets") {
+        complete {
+        	//Server.toJson(Server.getUserList(1))
+        	(server ? GetAllUserObj).mapTo[ListBuffer[User]].map(s => Server.toJson(s))
+        }
+      }
+    }~
+    post {
+      path("post" / "add") {
+        parameters("id?".as[Int], "message") { (id, message) =>
+        	(server ? PostTweets(id, message))
+          complete {
+            "OK"
+          }
         }
       }
     }
   }
-
+  
   startServer(interface = "localhost", port = 8080) {
     serverRoute
   }
@@ -69,11 +87,6 @@ object Server {
     println("Time Elapsed: " + Server.timeElapsed)
   }
   
-  def getUserList(id : Int) : User = {
-  	return Server.usersList(id)
-  }
-  
-  
   import org.json4s.native.Serialization.write
   import org.json4s.{FieldSerializer, DefaultFormats}
   //private implicit val formats = Serialization.formats(ShortTypeHints(List(classOf[Server])))
@@ -98,8 +111,142 @@ class Server extends Actor {
   println("Server started!")
   def receive = {
 
+  	case PostTweets(id, tweet) =>
+  		Server.messagesReceived += 1
+      println("Received tweet " + tweet)
+      //var user = Server.userMap(sender)
+      var user = getUser(id)
+      val rtPattern = "via @\\w+$".r
+      // Direct messaging
+      if (tweet.startsWith("dm ")) {
+        val toHandler = ("@\\w+".r findFirstIn tweet).mkString
+        if (toHandler.length() > 0) {
+          val toUser = new User(0)
+          toUser.setUserName(toHandler.substring(1))
+          Server.usersList(Server.usersList.indexOf(toUser)).addNotification(tweet)
+        }
+      }
+      // Retweet with rt or via parameter
+      else if (tweet.startsWith(Messages.rtKeys(0)) || ("" != (rtPattern findFirstIn tweet).mkString)) {
+        for (follower <- user.getFollowers())
+          //TODO Test
+          Server.usersList(follower).addMessage(tweet)
+      }
+      else {
+
+        var index = tweet.indexOf('@')
+        var followersSet : HashSet[User] = HashSet()
+        var username = findMentionedUsername(tweet, index + 1)
+        if (index == 0) {
+          var mentionedUser = new User(0)
+          mentionedUser.setUserName(username)
+          var mentionedUserObj = Server.usersList(Server.usersList.indexOf(mentionedUser))
+
+          //mentioned person's mentions tab
+          mentionedUserObj.addMention(tweet)
+
+          //If mentioned person follows the tweeter, add it to mentioned person's timeline
+          if (mentionedUserObj.isFollowed(user)) {
+            //Mentioned users timeline
+            mentionedUserObj.addMessage(tweet)
+
+            //senders timeline
+            user.addMessage(tweet)
+
+            //find mutual followers
+            var mutualFollowers = findMutualFollowers(mentionedUserObj, user)
+            for (mFollowers <- mutualFollowers) {
+              //mutual followers timeline
+              followersSet += mFollowers
+              //mFollowers.addMessage(tweet)
+            }
+          }
+
+          index = index + 1 + username.length()
+          var newIndex = tweet.indexOf('@', index)
+
+          while (newIndex != -1) {
+            username = findMentionedUsername(tweet, newIndex + 1)
+            index = newIndex + username.length() + 1
+
+            var mentionedExtraUsers = new User(0)
+            mentionedExtraUsers.setUserName(username)
+
+            var mentionedExtraUsersObj = Server.usersList(Server.usersList.indexOf(mentionedExtraUsers))
+
+            mentionedExtraUsersObj.addMention(tweet)
+            if (mentionedExtraUsersObj.isFollowed(user)) {
+              mentionedExtraUsersObj.addMessage(tweet)
+
+              var mutualFollowers1 = findMutualFollowers(mentionedExtraUsersObj, user)
+              for (m1Followers <- mutualFollowers1) {
+                //mutual followers timeline
+                followersSet += m1Followers
+                //mFollowers.addMessage(tweet)
+              }
+
+            }
+
+            newIndex = tweet.indexOf('@', index)
+          }
+
+          for (m2Followers <- followersSet) {
+            m2Followers.addMessage(tweet)
+          }
+
+        }
+        else if (index > 0) {
+
+          //senders timeline
+          user.addMessage(tweet)
+
+          //Sender's followers timelines
+          var followers = user.getFollowers()
+          for (eachFollower <- followers) {
+            Server.usersList(eachFollower).addMessage(tweet)
+          }
+
+          index = index + 1 + username.length()
+          var newIndex = tweet.indexOf('@', index)
+          while (newIndex != -1) {
+
+            username = findMentionedUsername(tweet, newIndex + 1)
+            index = newIndex + username.length() + 1
+
+            var mentionedExtraUsers = new User(0)
+            mentionedExtraUsers.setUserName(username)
+            var mentionedExtraUsersObj = Server.usersList(Server.usersList.indexOf(mentionedExtraUsers))
+
+            if (!user.isFollowed(mentionedExtraUsersObj)) {
+              mentionedExtraUsersObj.addMention(tweet)
+            }
+
+            newIndex = tweet.indexOf('@', index)
+          }
+
+        }
+        else {
+          user.addMessage(tweet)
+        }
+
+      }
+  	
+  	//REST Calls
+  	case GetAllUserObj =>
+  			sender ! Server.usersList
+  	
+  	//REST Calls
   	case getUserObj(id) =>
-  		sender ! Server.usersList(id)
+  		
+  		var usersCount : Int = Server.usersList.size
+  	
+	  	Server.usersList.foreach {
+	  		user => 
+	  			if (user.getID() == id) {
+	  				sender ! user 
+	  		  } 
+	  	}
+  	
   	
     case RegisterClients(actor, curUser) =>
       println("Registering client " + curUser.getID())
