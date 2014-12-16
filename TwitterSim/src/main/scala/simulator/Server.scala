@@ -108,8 +108,8 @@ object Server {
   private var timeElapsed : Int = 0
   private var totalMessagesRec : Int = 0
 
-  //  import ServerApp.system.dispatcher
-  //  ServerApp.system.scheduler.schedule(0.seconds, 1.seconds)(printServerHandledMessages())
+  import ServerApp.system.dispatcher
+  ServerApp.system.scheduler.schedule(0.seconds, 1.seconds)(printServerHandledMessages())
 
   //FIXME Doesn't cound valid
   def printServerHandledMessages() {
@@ -149,6 +149,7 @@ class Server extends Actor {
   
   	//REST call
   	case GetIsFollowing(id1, id2) =>
+  		Server.messagesReceived += 1
   		var userObj1 = getUser(id1)
   		var userObj2 = getUser(id2)
   
@@ -159,6 +160,7 @@ class Server extends Actor {
   	
   	//REST call
   	case GetIsFollowed(id1, id2) =>
+  		Server.messagesReceived += 1
   		var userObj1 = getUser(id1)
   		var userObj2 = getUser(id2)
   
@@ -183,11 +185,13 @@ class Server extends Actor {
   		
   	//REST call
   	case GetRetweets(id) =>
+  		Server.messagesReceived += 1
   		var userObj = getUser(id)
   		sender ! getRetweets(userObj)
   	
   	//REST call
   	case GetMyFollowers(id) =>
+  		Server.messagesReceived += 1
   		var userObj = getUser(id)
   		var followers = userObj.getFollowers()
   		sender ! followers.toList
@@ -316,11 +320,12 @@ class Server extends Actor {
   	
   	//REST Calls
   	case GetAllUserObj =>
+  		Server.messagesReceived += 1
   			sender ! Server.usersList
   	
   	//REST Calls
   	case getUserObj(id) =>
-  		
+  		Server.messagesReceived += 1
   		var usersCount : Int = Server.usersList.size
   	
 	  	Server.usersList.foreach {

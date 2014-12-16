@@ -57,6 +57,13 @@ class Interactor(serverActor : ActorRef) extends Actor {
   readUserRateStats(usersCount)
   //printUsers(userList)
 
+  var r = new Random()
+  var r1 = new Random()
+    
+  
+  context.system.scheduler.schedule(0.second, 1.second)(postREST(r1.nextInt(nClients -1)))
+  context.system.scheduler.schedule(0.milliseconds, 30.milliseconds)(getAllTweets(r.nextInt(nClients - 1)))
+  
   def receive = {
 
     case Init =>
@@ -105,6 +112,7 @@ class Interactor(serverActor : ActorRef) extends Actor {
       }
 
   }
+
 
   def sendMsg(clientActor : ActorRef, curUser : User) = {
     nMessages.incrementAndGet()
@@ -484,11 +492,21 @@ class Interactor(serverActor : ActorRef) extends Actor {
   	}  	
   }
   
-  def getAllTweets() {
-		val result = ClientApp.pipeline(Get("http://localhost:8080/get/retweets/1"))
+  def postREST(clientId : Int) {
+    println("Posting via REST API")
+    val result = ClientApp.pipeline(Post("http://localhost:8080/post/add?id?=${clientId}&message=sarveshisgreat"))
+  	result.foreach { response =>
+    	println(s"Request completed with status ${response.status} and content:\n${response.entity.asString}")
+    }
+  }
+  
+  def getAllTweets(clientId : Int) {
+  	
+  	val result = ClientApp.pipeline(Get("http://localhost:8080/get/tweets/"+clientId))
   	result.foreach { response =>
     	println(s"Request completed with status ${response.status} and content:\n${response.entity.asString}")
   	}
+  	
   }
 
 
