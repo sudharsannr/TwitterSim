@@ -44,6 +44,11 @@ object Messages {
   case object ClientCompleted extends TwitterMessage
   case class getUserObj(id: Int) extends TwitterMessage
   case class GetMyFollowers(id: Int) extends TwitterMessage
+  case class GetRetweets(id: Int) extends TwitterMessage
+  case class GetMutualFollowers(id1: Int, id2: Int) extends TwitterMessage
+  case class GetIsFollowing(id1: Int, id2: Int) extends TwitterMessage
+  case class GetIsFollowed(id1: Int, id2: Int) extends TwitterMessage
   case object GetAllUserObj extends TwitterMessage
+  
   case class PostTweets(id : Int, message : String) extends TwitterMessage
 }

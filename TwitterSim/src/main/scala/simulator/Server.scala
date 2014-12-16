@@ -34,7 +34,6 @@ object ServerApp extends App with SimpleRoutingApp{
     get {
       path("get" / "tweets" / IntNumber) { clientId =>
         complete {
-        	//Server.toJson(Server.getUserList(1))
         	(server ? getUserObj(clientId)).mapTo[User].map(s => Server.toJson(s))
         }
       }
@@ -58,9 +57,37 @@ object ServerApp extends App with SimpleRoutingApp{
       }
     }~
     get {
-      path("get" / "followers" / IntNumber) {clientId =>
+      path("get" / "followers" / IntNumber) { clientId =>
         complete {
-        	(server ? GetMyFollowers(clientId)).mapTo[MutableList[Int]].map(s => Server.toJson(s))
+        	(server ? GetMyFollowers(clientId)).mapTo[List[Int]].map(s => Server.toJson(s))
+        }
+      }
+    }~
+    get {
+      path("get" / "retweets" / IntNumber) { clientId =>
+        complete {
+        	(server ? GetRetweets(clientId)).mapTo[ListBuffer[String]].map(s => Server.toJson(s))
+        }
+      }
+    }~
+    get {
+      path("get" / "mutual" / IntNumber / IntNumber) { (clientId1, clientId2) =>
+        complete {
+        	(server ? GetMutualFollowers(clientId1, clientId2)).mapTo[List[Int]].map(s => Server.toJson(s))
+        }
+      }
+    }~
+    get {
+      path("get" / "isfollowing" / IntNumber / IntNumber) { (clientId1, clientId2) =>
+        complete {
+        	(server ? GetIsFollowing(clientId1, clientId2)).mapTo[String].map(s => Server.toJson(s))
+        }
+      }
+    }~
+    get {
+      path("get" / "isfollowed" / IntNumber / IntNumber) { (clientId1, clientId2) =>
+        complete {
+        	(server ? GetIsFollowed(clientId1, clientId2)).mapTo[String].map(s => Server.toJson(s))
         }
       }
     }
@@ -100,8 +127,9 @@ object Server {
   private implicit val formats = DefaultFormats + FieldSerializer[User]()
   def toJson(users: ListBuffer[User]): String = writePretty(users)
   def toJson(amber: User): String = writePretty(amber)
-  def toJson(followers: MutableList[Int]): String = writePretty(followers)
-  
+  def toJson(followers: List[Int]): String = writePretty(followers)
+  def toJson(retweets: => ListBuffer[String]): String = writePretty(retweets)
+  def toJson(result: String): String = writePretty(result)
 }
 
 /**
@@ -118,11 +146,52 @@ class Server extends Actor {
 
   println("Server started!")
   def receive = {
+  
+  	//REST call
+  	case GetIsFollowing(id1, id2) =>
+  		var userObj1 = getUser(id1)
+  		var userObj2 = getUser(id2)
+  
+  		if (userObj1.isFollowing(userObj2))
+  			sender ! "true"
+  		else
+  			sender ! "false"
+  	
+  	//REST call
+  	case GetIsFollowed(id1, id2) =>
+  		var userObj1 = getUser(id1)
+  		var userObj2 = getUser(id2)
+  
+  		if (userObj1.isFollowed(userObj2))
+  			sender ! "true"
+  		else
+  			sender ! "false"
+  		  	
+  	//REST call
+  	case GetMutualFollowers(id1, id2) =>
+  		var userObj1 = getUser(id1)
+  		var userObj2 = getUser(id2)
+  
+  		var mutualFollowers = findMutualFollowers(userObj1, userObj2)
+  		var mutualFollowerIds : ListBuffer[Int] = ListBuffer.empty[Int]
+  	
+  		for (mf <- mutualFollowers) {
+  			mutualFollowerIds += mf.getID()
+  		}
+  			
+  		sender ! mutualFollowerIds.toList
+  		
+  	//REST call
+  	case GetRetweets(id) =>
+  		var userObj = getUser(id)
+  		sender ! getRetweets(userObj)
   	
   	//REST call
   	case GetMyFollowers(id) =>
   		var userObj = getUser(id)
-  		userObj.getFollowers()
+  		var followers = userObj.getFollowers()
+  		sender ! followers.toList
+  		
   		
   	//REST call
   	case PostTweets(id, tweet) =>
@@ -401,6 +470,26 @@ class Server extends Actor {
 
   }
 
+  def getRetweets(userObj : User) : ListBuffer[String] = {
+  	var followersList = userObj.getFollowers()  	
+  	val rtPattern = "via @\\w+$".r
+  	var retweets : ListBuffer[String] = ListBuffer.empty[String]
+  	
+		for (followers <- followersList) {
+			var followerUserObj = getUser(followers)
+			var msgQueue = followerUserObj.getRecentMessages()
+			
+			
+			for (msgs <- msgQueue) {
+				if (msgs.startsWith(Messages.rtKeys(0)) || ("" != (rtPattern findFirstIn msgs).mkString)) {
+					retweets += msgs
+				}
+			}
+		}
+  	
+  	retweets
+  }
+  
   def findMentionedUsername(tweet : String, index : Int) : String = {
     var tweetArr = tweet.toCharArray()
     var i : Int = index

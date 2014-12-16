@@ -99,7 +99,9 @@ class Interactor(serverActor : ActorRef) extends Actor {
         println("Shutting down")
 //        ClientApp.serverActor ! Broadcast(PoisonPill)
 //        context.system.shutdown()
-        getAllTweets()
+        //getAllTweets()
+        //RestClient()
+        
       }
 
   }
@@ -483,7 +485,7 @@ class Interactor(serverActor : ActorRef) extends Actor {
   }
   
   def getAllTweets() {
-		val result = ClientApp.pipeline(Get("http://localhost:8080/get/all/tweets/"))
+		val result = ClientApp.pipeline(Get("http://localhost:8080/get/retweets/1"))
   	result.foreach { response =>
     	println(s"Request completed with status ${response.status} and content:\n${response.entity.asString}")
   	}
