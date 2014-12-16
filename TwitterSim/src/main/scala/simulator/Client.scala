@@ -10,6 +10,8 @@ import scala.concurrent.duration._
 import akka.routing.{ FromConfig, RoundRobinRouter, Broadcast, RandomRouter }
 import scala.actors.threadpool.AtomicInteger
 import java.util.concurrent.atomic.AtomicBoolean
+import spray.http._
+import spray.client.pipelining._
 
 //FIXME Load balancing to be done
 //FIXME Flow control required. 
@@ -17,10 +19,13 @@ object ClientApp extends App {
 
   //TODO Param
   val ipAddr : String = "127.0.0.1:8248"
-  val system = ActorSystem("TwitterClientActor", ConfigFactory.load("applicationClient.conf"))
+  implicit val system = ActorSystem("TwitterClientActor", ConfigFactory.load("applicationClient.conf"))
   val sActor = system.actorFor("akka.tcp://TwitterActor@" + ipAddr + "/user/Server")
   val serverActor = system.actorOf(Props.empty.withRouter(RoundRobinRouter(routees = Vector.fill(Messages.nServers)(sActor))), "serverRouter")
   val interActor = system.actorOf(Props(new Interactor(serverActor)))
+  import system.dispatcher
+  val pipeline = sendReceive
+  
   interActor ! Init
 
 }
@@ -91,8 +96,9 @@ class Interactor(serverActor : ActorRef) extends Actor {
       userMap -= ref
       if (userMap.isEmpty) {
         println("Shutting down")
-        ClientApp.serverActor ! Broadcast(PoisonPill)
-        context.system.shutdown()
+//        ClientApp.serverActor ! Broadcast(PoisonPill)
+//        context.system.shutdown()
+        RestClient()
       }
 
   }
@@ -451,6 +457,14 @@ class Interactor(serverActor : ActorRef) extends Actor {
       println()
     }
   }
+  
+  def RestClient () {
+  	val result = ClientApp.pipeline(Get("http://localhost:8080/get/tweets"))
+  	result.foreach { response =>
+    	println(s"Request completed with status ${response.status} and content:\n${response.entity.asString}")
+  	}
+  }
+
 
 }
 
@@ -489,5 +503,5 @@ class UserActor extends Actor {
       msgList.foreach(println)
       context.stop(self)
   }
-
+ 
 }
