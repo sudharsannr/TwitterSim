@@ -26,7 +26,6 @@ object ClientApp extends App {
   val interActor = system.actorOf(Props(new Interactor(serverActor)))
   import system.dispatcher
   val pipeline = sendReceive
-  
   interActor ! Init
 
 }
@@ -42,6 +41,7 @@ class Interactor(serverActor : ActorRef) extends Actor {
   var userMap : Map[ActorRef, User] = Map()
   var userList = new Array[User](usersCount)
   var cancelMap : Map[ActorRef, Cancellable] = Map()
+  var restCancellables : Array[Cancellable] = new Array[Cancellable](2)
   implicit val ev = context.dispatcher
 
   for (i <- 0 to usersCount - 1) {
@@ -59,11 +59,10 @@ class Interactor(serverActor : ActorRef) extends Actor {
 
   var r = new Random()
   var r1 = new Random()
-    
-  
-  context.system.scheduler.schedule(0.second, 1.second)(postREST(r1.nextInt(nClients -1)))
-  context.system.scheduler.schedule(0.milliseconds, 30.milliseconds)(getAllTweets(r.nextInt(nClients - 1)))
-  
+
+  //  restCancellables(0) = context.system.scheduler.schedule(0.second, 1.second)(postREST(userList(r1.nextInt(nClients - 1))))
+  //  restCancellables(1) = context.system.scheduler.schedule(0.milliseconds, 30.milliseconds)(getAllTweets(r.nextInt(nClients - 1)))
+
   def receive = {
 
     case Init =>
@@ -96,23 +95,22 @@ class Interactor(serverActor : ActorRef) extends Actor {
         queueCount.incrementAndGet() match {
           case 1 => self ! PrintNotifications
           case 2 => self ! PrintMentions
-          case default => 
+          case default =>
         }
       }
 
     case Terminated(ref) =>
       userMap -= ref
       if (userMap.isEmpty) {
-        println("Shutting down")
-//        ClientApp.serverActor ! Broadcast(PoisonPill)
-//        context.system.shutdown()
+        println("Client message queue processed!")
+        //ClientApp.serverActor ! Broadcast(PoisonPill)
+        //context.system.shutdown()
         //getAllTweets()
         //RestClient()
-        
+
       }
 
   }
-
 
   def sendMsg(clientActor : ActorRef, curUser : User) = {
     nMessages.incrementAndGet()
@@ -124,6 +122,7 @@ class Interactor(serverActor : ActorRef) extends Actor {
       limitReached.set(true)
       for (cancellable <- cancelMap.values)
         cancellable.cancel()
+      //restCancellables.foreach(c => c.cancel())
       directMessage()
       reTweet()
     }
@@ -190,8 +189,8 @@ class Interactor(serverActor : ActorRef) extends Actor {
           else
             tweet = tweetString + " " + rtKeys(rtIdx) + twUser.getName()
         }
-        if(tweet.length() > 0)
-        	revMap.get(curUser).get ! Tweet(tweet)
+        if (tweet.length() > 0)
+          revMap.get(curUser).get ! Tweet(tweet)
       }
     }
     self ! PrintMessages
@@ -323,7 +322,7 @@ class Interactor(serverActor : ActorRef) extends Actor {
     if (nMentions > usersCount)
       nMentions = usersCount
     var followersCount = followers.length
-    if(nMentions > followersCount)
+    if (nMentions > followersCount)
       nMentions = followersCount
     var followerList = ArrayBuffer.empty[Int]
     var i : Int = 0
@@ -426,7 +425,6 @@ class Interactor(serverActor : ActorRef) extends Actor {
         setUserRate(minRate.toInt, maxRate.toInt, startIdx, endIdx)
       startIdx = endIdx
     }
-
   }
 
   def setUserRate(minRate : Int, maxRate : Int, startIdx : Int, endIdx : Int) {
@@ -482,33 +480,33 @@ class Interactor(serverActor : ActorRef) extends Actor {
       println()
     }
   }
-  
-  def RestClient () {
-  	for (i <- 0 until usersCount) {
-	  	val result = ClientApp.pipeline(Get("http://localhost:8080/get/tweets/"+i))
-	  	result.foreach { response =>
-	    	println(s"Request completed with status ${response.status}, Client: ${i} and content:\n${response.entity.asString}")
-	  	}	
-  	}  	
-  }
-  
-  def postREST(clientId : Int) {
-    println("Posting via REST API")
-    val result = ClientApp.pipeline(Post("http://localhost:8080/post/add?id?=${clientId}&message=sarveshisgreat"))
-  	result.foreach { response =>
-    	println(s"Request completed with status ${response.status} and content:\n${response.entity.asString}")
+
+  def RestClient() {
+    for (i <- 0 until usersCount) {
+      val result = ClientApp.pipeline(Get("http://localhost:8080/get/tweets/" + i))
+      result.foreach { response =>
+        println(s"Request completed with status ${response.status}, Client: ${i} and content:\n${response.entity.asString}")
+      }
     }
   }
-  
-  def getAllTweets(clientId : Int) {
-  	
-  	val result = ClientApp.pipeline(Get("http://localhost:8080/get/tweets/"+clientId))
-  	result.foreach { response =>
-    	println(s"Request completed with status ${response.status} and content:\n${response.entity.asString}")
-  	}
-  	
+
+  def postREST(curUser : User) {
+    println("Posting via REST API")
+    var tweetStr = randomTweet(curUser).replaceAll(" ", "%20")
+    val clientId = curUser.getID()
+    val result = ClientApp.pipeline(Post("http://localhost:8080/post/add?id?=" + clientId + "&message=" + tweetStr))
+    result.foreach { response =>
+      println(s"Request completed with status ${response.status} and content:\n${response.entity.asString}")
+    }
   }
 
+  def getAllTweets(clientId : Int) {
+    val result = ClientApp.pipeline(Get("http://localhost:8080/get/tweets/" + clientId))
+    result.foreach { response =>
+      println(s"Request completed with status ${response.status} and content:\n${response.entity.asString}")
+    }
+
+  }
 
 }
 
@@ -520,7 +518,7 @@ class UserActor extends Actor {
       ClientApp.interActor ! ScheduleClient
 
     case Tweet(tweet) =>
-      println("Sending message " + tweet)
+      //println("Sending message " + tweet)
       ClientApp.serverActor ! Tweet(tweet)
 
     case Top(n) =>
@@ -547,5 +545,5 @@ class UserActor extends Actor {
       msgList.foreach(println)
       context.stop(self)
   }
- 
+
 }
