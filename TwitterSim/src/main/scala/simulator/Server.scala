@@ -470,8 +470,11 @@ class Server extends Actor {
       var user = Server.userMap(sender)
       sender ! NotificationList(user.getRecentNotifications(), user.getID())
       // Once done cancel the print sequence
-      Server.printCancellable.cancel()
-      println("Server message queue processed!")
+      if(!Server.printCancellable.isCancelled)
+      {
+    	  Server.printCancellable.cancel()
+    	  println("Server message queue processed!")
+      }
 
   }
 
