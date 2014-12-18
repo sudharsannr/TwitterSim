@@ -14,8 +14,6 @@ import spray.http._
 import spray.client.pipelining._
 import scala.collection.mutable.MutableList
 
-//FIXME Load balancing to be done
-//FIXME Flow control required. 
 object ClientApp extends App {
 
   //TODO Param
@@ -60,8 +58,8 @@ class Interactor(serverActor : ActorRef) extends Actor {
   var r = new Random()
   var r1 = new Random()
 
-  //  restCancellables(0) = context.system.scheduler.schedule(0.second, 1.second)(postREST(userList(r1.nextInt(nClients - 1))))
-  //  restCancellables(1) = context.system.scheduler.schedule(0.milliseconds, 30.milliseconds)(getAllTweets(r.nextInt(nClients - 1)))
+  //restCancellables(0) = context.system.scheduler.schedule(0.second, 1.second)(postREST(userList(r1.nextInt(nClients - 1))))
+  //restCancellables(1) = context.system.scheduler.schedule(0.milliseconds, 30.milliseconds)(getAllTweets(r.nextInt(nClients - 1)))
 
   def receive = {
 
@@ -113,18 +111,20 @@ class Interactor(serverActor : ActorRef) extends Actor {
   }
 
   def sendMsg(clientActor : ActorRef, curUser : User) = {
-    nMessages.incrementAndGet()
-    println(nMessages)
+    //println(nMessages)
     // Comparison greater when the message rate during peak exceeds the set limit
-    // FIXME Getting called multiple times. 
-    if (nMessages.get() >= Messages.msgLimit && !limitReached.get()) {
-      println("Limit reached!")
-      limitReached.set(true)
-      for (cancellable <- cancelMap.values)
-        cancellable.cancel()
-      //restCancellables.foreach(c => c.cancel())
-      directMessage()
-      reTweet()
+    if (nMessages.get() >= Messages.msgLimit) {
+      synchronized {
+        println("Limit reached!")
+        for (cancellable <- cancelMap.values)
+          cancellable.cancel()
+        //restCancellables.foreach(c => c.cancel())
+        if (!limitReached.get()) {
+          limitReached.set(true)
+          directMessage()
+          reTweet()
+        }
+      }
     }
 
     else if (nMessages.get() < Messages.msgLimit) {
@@ -134,12 +134,14 @@ class Interactor(serverActor : ActorRef) extends Actor {
       if (curTime >= Messages.peakStart && curTime < Messages.peakEnd) {
         for (i <- 0 to Messages.peakScale) {
           var rndTweet = randomTweet(curUser)
+          curUser.addMessage(rndTweet)
           clientActor ! Tweet(rndTweet)
         }
         nMessages.addAndGet(Messages.peakScale - 1)
       }
 
       else {
+        nMessages.incrementAndGet()
         var rndTweet = randomTweet(curUser)
         curUser.addMessage(rndTweet)
         clientActor ! Tweet(rndTweet)
@@ -491,12 +493,12 @@ class Interactor(serverActor : ActorRef) extends Actor {
   }
 
   def postREST(curUser : User) {
-    println("Posting via REST API")
+    //println("Posting via REST API")
     var tweetStr = randomTweet(curUser).replaceAll(" ", "%20")
     val clientId = curUser.getID()
     val result = ClientApp.pipeline(Post("http://localhost:8080/post/add?id?=" + clientId + "&message=" + tweetStr))
     result.foreach { response =>
-      println(s"Request completed with status ${response.status} and content:\n${response.entity.asString}")
+      //println(s"Request completed with status ${response.status} and content:\n${response.entity.asString}")
     }
   }
 
