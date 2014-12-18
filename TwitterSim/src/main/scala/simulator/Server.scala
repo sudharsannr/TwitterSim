@@ -333,7 +333,7 @@ class Server extends Actor {
       }
 
     case RegisterClients(actor, curUser) =>
-      println("Registering client " + curUser.getID())
+      //println("Registering client " + curUser.getID())
       Server.messagesReceived += 1
       Server.userMap += (actor -> curUser)
       Server.usersList += curUser

@@ -6,9 +6,9 @@ import scala.collection.mutable.ListBuffer
 object Messages {
 
   val nServers : Int = 20
-  val nClients : Int = 1000
+  val nClients : Int = 10000
   val maxNeighbors : Int = nClients - 1
-  val msgLimit : Int = 10000
+  val msgLimit : Int = 1000000
   val mean : Int = 200
   val avgFollowers : Int = 50
   val avgTweetLength : Int = 28
