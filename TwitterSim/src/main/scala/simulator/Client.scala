@@ -106,28 +106,25 @@ class Interactor(serverActor : ActorRef) extends Actor {
         //ClientApp.serverActor ! Broadcast(PoisonPill)
         //context.system.shutdown()
         //getAllTweets()
+        //RestClient()
 
       }
 
   }
 
   def sendMsg(clientActor : ActorRef, curUser : User) = {
-    //nMessages.incrementAndGet()
-    //println(nMessages)
+    nMessages.incrementAndGet()
+    println(nMessages)
     // Comparison greater when the message rate during peak exceeds the set limit
     // FIXME Getting called multiple times. 
-    if (nMessages.get() >= Messages.msgLimit) {
-      synchronized {
-        println("Limit reached!")
-        for (cancellable <- cancelMap.values)
-          cancellable.cancel()
-        //restCancellables.foreach(c => c.cancel())
-        if (!limitReached.get()) {
-          directMessage()
-          reTweet()
-        }
-        limitReached.set(true)
-      }
+    if (nMessages.get() >= Messages.msgLimit && !limitReached.get()) {
+      println("Limit reached!")
+      limitReached.set(true)
+      for (cancellable <- cancelMap.values)
+        cancellable.cancel()
+      //restCancellables.foreach(c => c.cancel())
+      directMessage()
+      reTweet()
     }
 
     else if (nMessages.get() < Messages.msgLimit) {
@@ -136,20 +133,16 @@ class Interactor(serverActor : ActorRef) extends Actor {
       val curTime = ((curSec - startTime).toDouble) / 1000
       if (curTime >= Messages.peakStart && curTime < Messages.peakEnd) {
         for (i <- 0 to Messages.peakScale) {
-          //var rndTweet = randomTweet(curUser)
-          //curUser.addMessage(rndTweet)
-          //clientActor ! Tweet(rndTweet)
-          postREST(curUser)
+          var rndTweet = randomTweet(curUser)
+          clientActor ! Tweet(rndTweet)
         }
         nMessages.addAndGet(Messages.peakScale - 1)
       }
 
       else {
-        postREST(curUser)
-        nMessages.incrementAndGet()
-        //var rndTweet = randomTweet(curUser)
-        //curUser.addMessage(rndTweet)
-        //clientActor ! Tweet(rndTweet)
+        var rndTweet = randomTweet(curUser)
+        curUser.addMessage(rndTweet)
+        clientActor ! Tweet(rndTweet)
       }
     }
   }
@@ -166,8 +159,7 @@ class Interactor(serverActor : ActorRef) extends Actor {
           for (i <- 0 until count) {
             val toAddr = "dm @" + userList(followers(rand.nextInt(followers.size))).getName()
             val tweetStr = toAddr + " " + randomString(140 - toAddr.length() - 1)
-            postMessage(user, tweetStr)
-            //actor ! Tweet(tweetStr)
+            actor ! Tweet(tweetStr)
           }
         }
     }
@@ -197,10 +189,8 @@ class Interactor(serverActor : ActorRef) extends Actor {
           else
             tweet = tweetString + " " + rtKeys(rtIdx) + twUser.getName()
         }
-        if (tweet.length() > 0) {
-          //revMap.get(curUser).get ! Tweet(tweet)
-          postMessage(curUser, tweet)
-        }
+        if (tweet.length() > 0)
+          revMap.get(curUser).get ! Tweet(tweet)
       }
     }
     self ! PrintMessages
@@ -491,28 +481,22 @@ class Interactor(serverActor : ActorRef) extends Actor {
     }
   }
 
-  def postREST(curUser : User) {
-    //println("Posting via REST API")
-    var tweetMsg = randomTweet(curUser)
-    var tweetStr = tweetMsg.replaceAll(" ", "%20")
-    val clientId = curUser.getID()
-    //println("Sending message " + tweetMsg)
-    curUser.addMessage(tweetMsg)
-    val result = ClientApp.pipeline(Post("http://localhost:8080/post/add?id?=" + clientId + "&message=" + tweetStr))
-    result.foreach { response =>
-      //println(s"POST Request completed with status ${response.status} and content:\n${response.entity.asString}")
+  def RestClient() {
+    for (i <- 0 until usersCount) {
+      val result = ClientApp.pipeline(Get("http://localhost:8080/get/tweets/" + i))
+      result.foreach { response =>
+        println(s"Request completed with status ${response.status}, Client: ${i} and content:\n${response.entity.asString}")
+      }
     }
   }
 
-  def postMessage(curUser : User, tweetMsg : String) {
-    //println("Posting via REST API")
-    var tweetStr = tweetMsg.replaceAll(" ", "%20")
+  def postREST(curUser : User) {
+    println("Posting via REST API")
+    var tweetStr = randomTweet(curUser).replaceAll(" ", "%20")
     val clientId = curUser.getID()
-    //println("Sending message " + tweetMsg)
-    curUser.addMessage(tweetMsg)
     val result = ClientApp.pipeline(Post("http://localhost:8080/post/add?id?=" + clientId + "&message=" + tweetStr))
     result.foreach { response =>
-      //println(s"POST Request completed with status ${response.status} and content:\n${response.entity.asString}")
+      println(s"Request completed with status ${response.status} and content:\n${response.entity.asString}")
     }
   }
 
